@@ -12,6 +12,11 @@
     <string name="previous">Previous</string>
     <string name="next">Next</string>
     <string name="refresh">Refresh</string>
+    <string name="rescan_media_files">Rescan files</string>
+    <string name="rescan_media_start">Scanning media library…</string>
+    <string name="rescan_media_done">Scan complete: %1$d files</string>
+    <string name="rescan_media_failed">Scan failed: %1$s</string>
+    <string name="rescan_media_background">Added. Indexing files in background…</string>
     <string name="menu">Menu</string>
     <string name="back">Up</string>
     <string name="folder_summary">%1$d folders · %2$d files</string>

@@ -15,7 +15,9 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import com.whj.music.data.AppSettings
+import com.whj.music.data.MediaTreeCache
 import com.whj.music.data.PlayModeStore
 import com.whj.music.databinding.ActivitySettingsBinding
 import com.whj.music.model.PlayMode
@@ -23,6 +25,9 @@ import com.whj.music.ui.AppTheme
 import com.whj.music.ui.AppThemeSkin
 import com.whj.music.util.LocaleHelper
 import com.whj.music.util.StoragePathUtils
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class SettingsActivity : AppCompatActivity() {
     private lateinit var binding: ActivitySettingsBinding
@@ -214,7 +219,9 @@ class SettingsActivity : AppCompatActivity() {
         }
         val existing = AppSettings.rootFolders(this)
         if (existing.any { it.equals(path, ignoreCase = true) }) {
+            // 已存在：仍允许后台刷新索引（对齐 reader 重复绑定）
             Toast.makeText(this, R.string.settings_root_exists, Toast.LENGTH_SHORT).show()
+            scanMediaTreeInBackground(showStartToast = true)
             return
         }
         AppSettings.addRootFolder(this, path)
@@ -225,6 +232,41 @@ class SettingsActivity : AppCompatActivity() {
             getString(R.string.settings_root_added, label),
             Toast.LENGTH_SHORT,
         ).show()
+        // 对齐 reader：添加后立即后台整库索引，不阻塞设置页
+        Toast.makeText(this, R.string.rescan_media_background, Toast.LENGTH_SHORT).show()
+        scanMediaTreeInBackground(showStartToast = false)
+    }
+
+    /**
+     * 后台全量扫描 MediaStore 目录树缓存（添加主目录 / 重复选择时调用）。
+     * @param showStartToast true 时提示「正在扫描…」（重复添加路径）
+     */
+    private fun scanMediaTreeInBackground(showStartToast: Boolean) {
+        if (showStartToast) {
+            Toast.makeText(this, R.string.rescan_media_start, Toast.LENGTH_SHORT).show()
+        }
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching { MediaTreeCache.fullScan(this@SettingsActivity) }
+            }
+            if (isFinishing) return@launch
+            result.onSuccess { snap ->
+                Toast.makeText(
+                    this@SettingsActivity,
+                    getString(R.string.rescan_media_done, snap.totalFiles),
+                    Toast.LENGTH_LONG,
+                ).show()
+            }.onFailure { e ->
+                Toast.makeText(
+                    this@SettingsActivity,
+                    getString(
+                        R.string.rescan_media_failed,
+                        e.message ?: e.javaClass.simpleName,
+                    ),
+                    Toast.LENGTH_LONG,
+                ).show()
+            }
+        }
     }
 
     private fun refreshRootFoldersUi() {

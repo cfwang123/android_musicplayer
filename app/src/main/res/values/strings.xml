@@ -12,6 +12,11 @@
     <string name="previous">上一首</string>
     <string name="next">下一首</string>
     <string name="refresh">刷新列表</string>
+    <string name="rescan_media_files">重新扫描文件</string>
+    <string name="rescan_media_start">正在扫描媒体库…</string>
+    <string name="rescan_media_done">扫描完成：%1$d 个文件</string>
+    <string name="rescan_media_failed">扫描失败：%1$s</string>
+    <string name="rescan_media_background">已添加，正在后台索引文件…</string>
     <string name="menu">菜单</string>
     <string name="back">返回上级</string>
     <string name="folder_summary">%1$d 个文件夹 · %2$d 个文件</string>

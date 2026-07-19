@@ -4,6 +4,7 @@
 *.aab
 *.dex
 *.class
+*.lnk
 
 # Generated files
 bin/

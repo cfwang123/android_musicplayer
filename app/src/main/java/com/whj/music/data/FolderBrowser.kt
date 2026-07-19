@@ -5,7 +5,6 @@ import android.content.Context
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
-import com.whj.music.R
 import com.whj.music.model.BrowseItem
 import com.whj.music.model.BrowseItemType
 import com.whj.music.model.PlayableMedia
@@ -15,40 +14,69 @@ import kotlinx.coroutines.withContext
 /**
  * 基于 MediaStore 的文件夹浏览器。
  * folderPath 使用相对路径，统一以 "/" 结尾（根目录为空字符串）。
+ *
+ * 列表走 [MediaTreeCache]：切换目录内存直出；进入时校验签名，不一致则更新。
  */
 class FolderBrowser(private val context: Context) {
 
-    suspend fun list(folderPath: String): List<BrowseItem> = withContext(Dispatchers.IO) {
-        buildListing(normalizeFolder(folderPath)).items
+    /**
+     * 主线程可调用：内存缓存中的当前层列表；无缓存返回 null。
+     */
+    fun peekList(folderPath: String): List<BrowseItem>? =
+        MediaTreeCache.peekItems(context, normalizeFolder(folderPath))
+
+    /**
+     * 主线程可调用：配置主目录的入口列表（不含「播放列表」项）。
+     */
+    fun peekConfiguredRoots(rootPaths: List<String>): List<BrowseItem>? =
+        MediaTreeCache.peekRootItems(context, rootPaths)
+
+    suspend fun list(
+        folderPath: String,
+        forceRescan: Boolean = false,
+    ): List<BrowseItem> = withContext(Dispatchers.IO) {
+        MediaTreeCache.ensureAndList(
+            context,
+            normalizeFolder(folderPath),
+            forceRescan = forceRescan,
+        ).items
+    }
+
+    /**
+     * 进入目录：返回缓存/更新后的列表，以及内容是否相对进入前有变化。
+     */
+    suspend fun listWithRefresh(
+        folderPath: String,
+        forceRescan: Boolean = false,
+    ): MediaTreeCache.RefreshResult = withContext(Dispatchers.IO) {
+        MediaTreeCache.ensureAndList(
+            context,
+            normalizeFolder(folderPath),
+            forceRescan = forceRescan,
+        )
     }
 
     /**
      * 1 屏根目录：仅展示配置的主目录（快捷入口）。
      * 副标题为「n 项」（直接文件 + 子文件夹）；[BrowseItem.directFileCount] 仍为曲目数。
      */
-    suspend fun listConfiguredRoots(rootPaths: List<String>): List<BrowseItem> = withContext(Dispatchers.IO) {
-        rootPaths
-            .map { normalizeFolder(it) }
-            .filter { it.isNotEmpty() }
-            .distinct()
-            .map { path ->
-                val listing = buildListing(path)
-                val directFiles = listing.items.count { it.type == BrowseItemType.FILE }
-                val subFolders = listing.items.count { it.type == BrowseItemType.FOLDER }
-                val name = path.trim('/').substringAfterLast('/').ifBlank { path.trim('/') }
-                BrowseItem(
-                    type = BrowseItemType.FOLDER,
-                    name = name,
-                    folderPath = path,
-                    directFileCount = directFiles,
-                    subtitle = context.getString(R.string.folder_item_count, subFolders + directFiles),
-                )
-            }
-            .sortedBy { it.name.lowercase() }
+    suspend fun listConfiguredRoots(
+        rootPaths: List<String>,
+        forceRescan: Boolean = false,
+    ): List<BrowseItem> = withContext(Dispatchers.IO) {
+        MediaTreeCache.listConfiguredRoots(context, rootPaths, forceRescan).items
+    }
+
+    suspend fun listConfiguredRootsWithRefresh(
+        rootPaths: List<String>,
+        forceRescan: Boolean = false,
+    ): MediaTreeCache.RefreshResult = withContext(Dispatchers.IO) {
+        MediaTreeCache.listConfiguredRoots(context, rootPaths, forceRescan)
     }
 
     /**
      * 扫描 MediaStore，返回所有含媒体文件的相对目录路径（可用于添加主目录）。
+     * 不依赖树缓存（设置页选目录时用）。
      */
     suspend fun listAllMediaFolderPaths(): List<String> = withContext(Dispatchers.IO) {
         val paths = linkedSetOf<String>()
@@ -73,9 +101,11 @@ class FolderBrowser(private val context: Context) {
     }
 
     /** 当前文件夹内可连续播放的媒体（不含子文件夹） */
-    suspend fun listPlayableInFolder(folderPath: String): List<PlayableMedia> = withContext(Dispatchers.IO) {
-        buildListing(normalizeFolder(folderPath)).items.mapNotNull { it.toPlayable() }
-    }
+    suspend fun listPlayableInFolder(folderPath: String): List<PlayableMedia> =
+        withContext(Dispatchers.IO) {
+            MediaTreeCache.listPlayable(context, normalizeFolder(folderPath))
+                .mapNotNull { it.toPlayable() }
+        }
 
     /**
      * 按 mediaId 列表解析为 [BrowseItem]（保持传入顺序）。
@@ -221,12 +251,7 @@ class FolderBrowser(private val context: Context) {
     ): Pair<String, List<PlayableMedia>>? {
         val current = normalizeFolder(currentFolder)
         if (current.isEmpty()) return null
-        val parent = parentFolder(current) ?: return null
-        val listing = buildListing(parent)
-        val siblingFolders = listing.items
-            .filter { it.type == BrowseItemType.FOLDER && it.directFileCount > 0 }
-            .map { it.folderPath }
-
+        val siblingFolders = MediaTreeCache.siblingFoldersWithFiles(context, current)
         if (siblingFolders.isEmpty()) return null
 
         val idx = siblingFolders.indexOf(current).let { if (it < 0) 0 else it }
@@ -236,233 +261,19 @@ class FolderBrowser(private val context: Context) {
             (idx - 1 + siblingFolders.size) % siblingFolders.size
         }
         val nextPath = siblingFolders[nextIdx]
-        val playables = buildListing(nextPath).items.mapNotNull { it.toPlayable() }
+        val playables = MediaTreeCache.listPlayable(context, nextPath).mapNotNull { it.toPlayable() }
         if (playables.isEmpty()) return null
         return nextPath to playables
     }
 
-    private data class Listing(
-        val items: List<BrowseItem>,
-        val directFileCounts: Map<String, Int>,
-    )
-
-    private fun buildListing(folderPath: String): Listing {
-        val folders = linkedMapOf<String, BrowseItem>()
-        val files = mutableListOf<BrowseItem>()
-        val directFileCounts = mutableMapOf<String, Int>()
-        // 每个目录下的直接子文件夹名（用于「n 项」= 文件 + 子文件夹）
-        val childFolderNames = mutableMapOf<String, MutableSet<String>>()
-
-        scanAudio(folderPath, folders, files, directFileCounts, childFolderNames)
-        scanVideo(folderPath, folders, files, directFileCounts, childFolderNames)
-
-        val folderList = folders.values.map { folder ->
-            val fileCount = directFileCounts[folder.folderPath] ?: 0
-            val subCount = childFolderNames[folder.folderPath]?.size ?: 0
-            folder.copy(
-                directFileCount = fileCount,
-                // 副标题：n 项；右侧仍用 directFileCount 显示「n 首」
-                subtitle = context.getString(R.string.folder_item_count, fileCount + subCount),
-            )
-        }.sortedBy { it.name.lowercase() }
-
-        val fileList = files.sortedBy { it.name.lowercase() }
-        return Listing(folderList + fileList, directFileCounts)
+    /** 强制全量重扫 MediaStore 树缓存 */
+    suspend fun rescanTree(): MediaTreeCache.Snapshot = withContext(Dispatchers.IO) {
+        MediaTreeCache.fullScan(context)
     }
 
-    private fun scanAudio(
-        folderPath: String,
-        folders: MutableMap<String, BrowseItem>,
-        files: MutableList<BrowseItem>,
-        directFileCounts: MutableMap<String, Int>,
-        childFolderNames: MutableMap<String, MutableSet<String>>,
-    ) {
-        val collection = audioCollection()
-        val projection = arrayOf(
-            MediaStore.Audio.Media._ID,
-            MediaStore.Audio.Media.DISPLAY_NAME,
-            MediaStore.Audio.Media.TITLE,
-            MediaStore.Audio.Media.ARTIST,
-            MediaStore.Audio.Media.DURATION,
-            MediaStore.Audio.Media.RELATIVE_PATH,
-            MediaStore.Audio.Media.IS_MUSIC,
-            MediaStore.Audio.Media.DATA,
-        )
-
-        context.contentResolver.query(
-            collection,
-            projection,
-            null,
-            null,
-            "${MediaStore.Audio.Media.DISPLAY_NAME} COLLATE NOCASE ASC",
-        )?.use { cursor ->
-            val idCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
-            val displayCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
-            val titleCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
-            val artistCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
-            val durationCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
-            val pathCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.RELATIVE_PATH)
-            val isMusicCol = cursor.getColumnIndex(MediaStore.Audio.Media.IS_MUSIC)
-            val dataCol = cursor.getColumnIndex(MediaStore.Audio.Media.DATA)
-
-            while (cursor.moveToNext()) {
-                if (isMusicCol >= 0 && cursor.getInt(isMusicCol) == 0) continue
-                val relative = normalizeFolder(cursor.getString(pathCol).orEmpty())
-                val data = if (dataCol >= 0) cursor.getString(dataCol) else null
-                processEntry(
-                    folderPath = folderPath,
-                    relative = relative,
-                    id = cursor.getLong(idCol),
-                    displayName = cursor.getString(displayCol),
-                    title = cursor.getString(titleCol),
-                    artist = cursor.getString(artistCol),
-                    durationMs = cursor.getLong(durationCol),
-                    isVideo = false,
-                    collection = collection,
-                    folders = folders,
-                    files = files,
-                    directFileCounts = directFileCounts,
-                    childFolderNames = childFolderNames,
-                    dataPath = data,
-                )
-            }
-        }
-    }
-
-    private fun scanVideo(
-        folderPath: String,
-        folders: MutableMap<String, BrowseItem>,
-        files: MutableList<BrowseItem>,
-        directFileCounts: MutableMap<String, Int>,
-        childFolderNames: MutableMap<String, MutableSet<String>>,
-    ) {
-        val collection = videoCollection()
-        val projection = arrayOf(
-            MediaStore.Video.Media._ID,
-            MediaStore.Video.Media.DISPLAY_NAME,
-            MediaStore.Video.Media.TITLE,
-            MediaStore.Video.Media.ARTIST,
-            MediaStore.Video.Media.DURATION,
-            MediaStore.Video.Media.RELATIVE_PATH,
-            MediaStore.Video.Media.DATA,
-        )
-
-        context.contentResolver.query(
-            collection,
-            projection,
-            null,
-            null,
-            "${MediaStore.Video.Media.DISPLAY_NAME} COLLATE NOCASE ASC",
-        )?.use { cursor ->
-            val idCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media._ID)
-            val displayCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DISPLAY_NAME)
-            val titleCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.TITLE)
-            val artistCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.ARTIST)
-            val durationCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DURATION)
-            val pathCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.RELATIVE_PATH)
-            val dataCol = cursor.getColumnIndex(MediaStore.Video.Media.DATA)
-
-            while (cursor.moveToNext()) {
-                val relative = normalizeFolder(cursor.getString(pathCol).orEmpty())
-                val data = if (dataCol >= 0) cursor.getString(dataCol) else null
-                processEntry(
-                    folderPath = folderPath,
-                    relative = relative,
-                    id = cursor.getLong(idCol),
-                    displayName = cursor.getString(displayCol),
-                    title = cursor.getString(titleCol),
-                    artist = cursor.getString(artistCol),
-                    durationMs = cursor.getLong(durationCol),
-                    isVideo = true,
-                    collection = collection,
-                    folders = folders,
-                    files = files,
-                    directFileCounts = directFileCounts,
-                    childFolderNames = childFolderNames,
-                    dataPath = data,
-                )
-            }
-        }
-    }
-
-    private fun processEntry(
-        folderPath: String,
-        relative: String,
-        id: Long,
-        displayName: String?,
-        title: String?,
-        artist: String?,
-        durationMs: Long,
-        isVideo: Boolean,
-        collection: Uri,
-        folders: MutableMap<String, BrowseItem>,
-        files: MutableList<BrowseItem>,
-        directFileCounts: MutableMap<String, Int>,
-        childFolderNames: MutableMap<String, MutableSet<String>>,
-        dataPath: String?,
-    ) {
-        // 统计该文件所在目录的直接文件数（不含更深层）
-        directFileCounts[relative] = (directFileCounts[relative] ?: 0) + 1
-        // 登记路径上的父子文件夹关系，便于算「文件 + 子文件夹」项数
-        registerChildFolders(relative, childFolderNames)
-
-        if (!relative.startsWith(folderPath)) return
-
-        val remainder = relative.removePrefix(folderPath)
-        if (remainder.isNotEmpty()) {
-            // 子文件夹：取下一级目录名
-            val childName = remainder.trim('/').substringBefore('/')
-            if (childName.isEmpty()) return
-            val childPath = folderPath + childName + "/"
-            if (!folders.containsKey(childPath)) {
-                folders[childPath] = BrowseItem(
-                    type = BrowseItemType.FOLDER,
-                    name = childName,
-                    folderPath = childPath,
-                    subtitle = "",
-                )
-            }
-            return
-        }
-
-        // 当前目录下的文件
-        val name = displayName?.takeIf { it.isNotBlank() }
-            ?: title?.takeIf { it.isNotBlank() }
-            ?: "未命名"
-        val subtitle = when {
-            isVideo -> "视频 · 仅声音"
-            !artist.isNullOrBlank() && !artist.equals("<unknown>", true) -> artist
-            else -> "音频"
-        }
-        val uri = ContentUris.withAppendedId(collection, id)
-        val mediaId = if (isVideo) id or VIDEO_ID_FLAG else id
-
-        val resolvedPath = resolveFilePath(dataPath, relative, displayName)
-        files += BrowseItem(
-            type = BrowseItemType.FILE,
-            name = name,
-            folderPath = folderPath,
-            uri = uri,
-            mediaId = mediaId,
-            durationMs = durationMs.coerceAtLeast(0L),
-            isVideo = isVideo,
-            subtitle = subtitle,
-            filePath = resolvedPath,
-        )
-    }
-
-    /** 将 relative 路径各段登记为父目录的直接子文件夹 */
-    private fun registerChildFolders(
-        relative: String,
-        childFolderNames: MutableMap<String, MutableSet<String>>,
-    ) {
-        val parts = relative.trim('/').split('/').filter { it.isNotEmpty() }
-        if (parts.isEmpty()) return
-        var parent = ""
-        for (part in parts) {
-            childFolderNames.getOrPut(parent) { mutableSetOf() }.add(part)
-            parent = parent + part + "/"
-        }
+    /** 媒体增删改后使缓存失效（下次进入会重扫） */
+    fun invalidateCache(clearDisk: Boolean = false) {
+        MediaTreeCache.invalidate(clearDisk = clearDisk, ctx = context)
     }
 
     private fun resolveFilePath(dataPath: String?, relative: String, displayName: String?): String? {

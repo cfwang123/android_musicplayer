@@ -130,7 +130,8 @@ class BrowseAdapter(
                     playingMediaId != null && item.mediaId == playingMediaId
             }
 
-            binding.playingBar.visibility = if (isPlaying) View.VISIBLE else View.GONE
+            // 正在播放：仅用背景/文字高亮，不再显示左侧竖条
+            binding.playingBar.visibility = View.GONE
             binding.itemRoot.setBackgroundResource(
                 when {
                     selected -> R.drawable.bg_item_selected

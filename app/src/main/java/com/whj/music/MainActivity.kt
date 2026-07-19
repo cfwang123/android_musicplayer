@@ -36,6 +36,7 @@ import com.whj.music.data.FavoriteStore
 import com.whj.music.data.FolderBrowser
 import com.whj.music.data.FolderPlaybackStore
 import com.whj.music.data.MediaFileOps
+import com.whj.music.data.MediaTreeCache
 import com.whj.music.data.PlayModeStore
 import com.whj.music.data.PlaybackStore
 import com.whj.music.data.PlaylistPaths
@@ -111,7 +112,8 @@ class MainActivity : AppCompatActivity() {
                 },
             )
             exitSelectionMode()
-            loadFolder(currentFolder)
+            browser.invalidateCache()
+            loadFolder(currentFolder, forceRescan = true)
         } else if (items.isNotEmpty()) {
             showToast(getString(R.string.file_delete_fail))
         }
@@ -869,6 +871,7 @@ class MainActivity : AppCompatActivity() {
         val popup = PopupMenu(this, anchor)
         var order = 0
         popup.menu.add(0, MENU_REFRESH, order++, R.string.refresh)
+        popup.menu.add(0, MENU_RESCAN, order++, R.string.rescan_media_files)
         if (PlaylistPaths.isPlaylistsRoot(currentFolder) || currentFolder.isEmpty()) {
             popup.menu.add(0, MENU_NEW_PLAYLIST, order++, R.string.menu_new_playlist)
         }
@@ -881,7 +884,15 @@ class MainActivity : AppCompatActivity() {
         popup.setOnMenuItemClickListener { item ->
             when {
                 item.itemId == MENU_REFRESH -> {
-                    if (hasMediaPermission()) loadFolder(currentFolder) else requestPermissions()
+                    if (hasMediaPermission()) {
+                        loadFolder(currentFolder, forceRescan = false)
+                    } else {
+                        requestPermissions()
+                    }
+                    true
+                }
+                item.itemId == MENU_RESCAN -> {
+                    if (hasMediaPermission()) rescanMediaFiles() else requestPermissions()
                     true
                 }
                 item.itemId == MENU_NEW_PLAYLIST -> {
@@ -914,6 +925,28 @@ class MainActivity : AppCompatActivity() {
             }
         }
         popup.show()
+    }
+
+    /** 强制全量重扫 MediaStore 目录树缓存 */
+    private fun rescanMediaFiles() {
+        if (PlaylistPaths.isInPlaylistSpace(currentFolder)) {
+            // 播放列表不依赖媒体树；仍触发全扫以便之后进文件夹更快/最新
+            showToast(getString(R.string.rescan_media_start))
+            lifecycleScope.launch {
+                try {
+                    val snap = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        browser.rescanTree()
+                    }
+                    showToast(getString(R.string.rescan_media_done, snap.totalFiles))
+                    loadFolder(currentFolder)
+                } catch (e: Exception) {
+                    showToast(getString(R.string.rescan_media_failed, e.message ?: ""))
+                }
+            }
+            return
+        }
+        showToast(getString(R.string.rescan_media_start))
+        loadFolder(currentFolder, forceRescan = true, showRescanToast = true)
     }
 
     /** 定时关闭：5~120 分钟，每 5 分钟一档。itemId = MENU_SLEEP_MIN + 分钟数 */
@@ -1627,7 +1660,8 @@ class MainActivity : AppCompatActivity() {
                         },
                     )
                     exitSelectionMode()
-                    loadFolder(currentFolder)
+                    browser.invalidateCache()
+                    loadFolder(currentFolder, forceRescan = true)
                 }
                 else -> showToast(getString(R.string.file_delete_fail))
             }
@@ -1727,75 +1761,205 @@ class MainActivity : AppCompatActivity() {
         return true
     }
 
-    private fun loadFolder(folderPath: String, scrollToMediaId: Long? = null) {
+    /**
+     * 加载目录。
+     * - 媒体文件夹：内存缓存命中时主线程立刻切换列表，后台校验签名，变化再刷 UI
+     * - [forceRescan]：强制全量重扫 MediaStore 树
+     */
+    private fun loadFolder(
+        folderPath: String,
+        scrollToMediaId: Long? = null,
+        forceRescan: Boolean = false,
+        showRescanToast: Boolean = false,
+    ) {
         if (selectionMode) exitSelectionMode()
-        currentFolder = FolderBrowser.normalizeFolder(folderPath)
-        browse.loadingBar.visibility = View.VISIBLE
+        val targetFolder = FolderBrowser.normalizeFolder(folderPath)
+        currentFolder = targetFolder
         browse.emptyState.visibility = View.GONE
         browse.permissionBtn.visibility = View.GONE
         browse.songList.visibility = View.VISIBLE
         updatePathUi()
 
-        lifecycleScope.launch {
-            try {
-                val roots = AppSettings.rootFolders(this@MainActivity)
-                currentItems = when {
-                    PlaylistPaths.isPlaylistsRoot(currentFolder) -> listPlaylistsAsBrowseItems()
-                    PlaylistPaths.isFavorites(currentFolder) -> listFavoriteTracks()
-                    PlaylistPaths.isUserPlaylist(currentFolder) -> {
-                        listPlaylistTracks(PlaylistPaths.playlistIdOf(currentFolder)!!)
-                    }
-                    currentFolder.isEmpty() && roots.isNotEmpty() -> {
-                        listOf(playlistsRootItem()) + browser.listConfiguredRoots(roots)
-                    }
-                    currentFolder.isEmpty() -> {
-                        listOf(playlistsRootItem()) + browser.list(currentFolder)
-                    }
-                    else -> browser.list(currentFolder)
+        val roots = AppSettings.rootFolders(this)
+        val isPlaylistSpace = PlaylistPaths.isInPlaylistSpace(targetFolder)
+        val isMediaBrowse = !isPlaylistSpace
+
+        // 1) 内存缓存：主线程立刻切换（无 MediaStore 查询）
+        var shownFromCache = false
+        if (isMediaBrowse && !forceRescan) {
+            val cached: List<BrowseItem>? = when {
+                targetFolder.isEmpty() && roots.isNotEmpty() -> {
+                    browser.peekConfiguredRoots(roots)?.let { listOf(playlistsRootItem()) + it }
                 }
-                playableInFolder = currentItems.mapNotNull { it.toPlayable() }
-                // 无动画提交列表
-                browseAdapter.submitList(null)
-                browseAdapter.submitList(currentItems.toList()) {
-                    if (scrollToMediaId != null) {
-                        scrollBrowseToMedia(scrollToMediaId)
-                    }
+                targetFolder.isEmpty() -> {
+                    browser.peekList("")?.let { listOf(playlistsRootItem()) + it }
                 }
-                val folderCount = currentItems.count { it.type == BrowseItemType.FOLDER }
-                val fileCount = currentItems.count { it.type == BrowseItemType.FILE }
-                browse.songCountText.text = getString(R.string.folder_summary, folderCount, fileCount)
-                if (currentItems.isEmpty()) {
-                    browse.emptyMessage.text = when {
-                        PlaylistPaths.isPlaylistsRoot(currentFolder) ->
-                            getString(R.string.playlists_empty)
-                        PlaylistPaths.isFavorites(currentFolder) ->
-                            getString(R.string.favorites_empty)
-                        currentFolder.isEmpty() -> {
-                            if (roots.isNotEmpty()) {
-                                getString(R.string.settings_roots_empty)
-                            } else {
-                                getString(R.string.empty_library)
-                            }
-                        }
-                        else -> getString(R.string.empty_folder)
-                    }
-                    browse.emptyState.visibility = View.VISIBLE
-                    browse.songList.visibility = View.GONE
-                }
-                lastState?.let { applyPlayingHighlight(it) }
-                updateSelectionUi()
-                // 打开文件夹时，按需恢复该文件夹上次播放（外部已指定滚动目标则不抢播）
-                // 播放列表总览不恢复播放
-                if (scrollToMediaId == null &&
-                    !PlaylistPaths.isPlaylistsRoot(currentFolder)
-                ) {
-                    maybeResumeFolderPlayback()
-                }
-            } catch (e: Exception) {
-                Toast.makeText(this@MainActivity, e.message ?: "load failed", Toast.LENGTH_SHORT).show()
-            } finally {
+                else -> browser.peekList(targetFolder)
+            }
+            if (cached != null) {
+                applyBrowseItems(
+                    items = cached,
+                    roots = roots,
+                    scrollToMediaId = scrollToMediaId,
+                    resumePlayback = scrollToMediaId == null,
+                )
+                shownFromCache = true
                 browse.loadingBar.visibility = View.GONE
             }
+        }
+
+        if (!shownFromCache) {
+            browse.loadingBar.visibility = View.VISIBLE
+        }
+
+        lifecycleScope.launch {
+            try {
+                val loadFolderSnapshot = targetFolder
+                var fromCache = shownFromCache
+
+                // 2) 内存未命中时先读磁盘缓存（仅 IO，无 MediaStore），尽快出列表
+                if (isMediaBrowse && !fromCache && !forceRescan) {
+                    val diskItems = kotlinx.coroutines.withContext(
+                        kotlinx.coroutines.Dispatchers.IO,
+                    ) {
+                        MediaTreeCache.load(this@MainActivity)
+                        when {
+                            loadFolderSnapshot.isEmpty() && roots.isNotEmpty() -> {
+                                browser.peekConfiguredRoots(roots)
+                                    ?.let { listOf(playlistsRootItem()) + it }
+                            }
+                            loadFolderSnapshot.isEmpty() -> {
+                                browser.peekList("")
+                                    ?.let { listOf(playlistsRootItem()) + it }
+                            }
+                            else -> browser.peekList(loadFolderSnapshot)
+                        }
+                    }
+                    if (currentFolder != loadFolderSnapshot) return@launch
+                    if (diskItems != null) {
+                        applyBrowseItems(
+                            items = diskItems,
+                            roots = roots,
+                            scrollToMediaId = scrollToMediaId,
+                            resumePlayback = scrollToMediaId == null,
+                        )
+                        fromCache = true
+                        browse.loadingBar.visibility = View.GONE
+                    }
+                }
+
+                // 3) 校验签名 / 必要时重扫；内容变化才刷 UI
+                val resultItems: List<BrowseItem>
+                var contentChanged = true
+                when {
+                    PlaylistPaths.isPlaylistsRoot(loadFolderSnapshot) -> {
+                        resultItems = listPlaylistsAsBrowseItems()
+                    }
+                    PlaylistPaths.isFavorites(loadFolderSnapshot) -> {
+                        resultItems = listFavoriteTracks()
+                    }
+                    PlaylistPaths.isUserPlaylist(loadFolderSnapshot) -> {
+                        resultItems = listPlaylistTracks(
+                            PlaylistPaths.playlistIdOf(loadFolderSnapshot)!!,
+                        )
+                    }
+                    loadFolderSnapshot.isEmpty() && roots.isNotEmpty() -> {
+                        val r = browser.listConfiguredRootsWithRefresh(roots, forceRescan)
+                        resultItems = listOf(playlistsRootItem()) + r.items
+                        contentChanged = r.contentChanged
+                        if (showRescanToast && forceRescan) {
+                            showToast(
+                                getString(R.string.rescan_media_done, r.snapshot.totalFiles),
+                            )
+                        }
+                    }
+                    else -> {
+                        val r = browser.listWithRefresh(loadFolderSnapshot, forceRescan)
+                        resultItems = if (loadFolderSnapshot.isEmpty()) {
+                            listOf(playlistsRootItem()) + r.items
+                        } else {
+                            r.items
+                        }
+                        contentChanged = r.contentChanged
+                        if (showRescanToast && forceRescan) {
+                            showToast(
+                                getString(R.string.rescan_media_done, r.snapshot.totalFiles),
+                            )
+                        }
+                    }
+                }
+                // 用户已离开该目录则丢弃
+                if (currentFolder != loadFolderSnapshot) return@launch
+
+                if (contentChanged || !fromCache) {
+                    applyBrowseItems(
+                        items = resultItems,
+                        roots = roots,
+                        scrollToMediaId = scrollToMediaId,
+                        // 已从缓存展示并可能已触发恢复时，避免二次抢播
+                        resumePlayback = scrollToMediaId == null && !fromCache,
+                    )
+                }
+            } catch (e: Exception) {
+                if (showRescanToast && forceRescan) {
+                    showToast(getString(R.string.rescan_media_failed, e.message ?: ""))
+                } else {
+                    Toast.makeText(
+                        this@MainActivity,
+                        e.message ?: "load failed",
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                }
+            } finally {
+                if (currentFolder == targetFolder) {
+                    browse.loadingBar.visibility = View.GONE
+                }
+            }
+        }
+    }
+
+    private fun applyBrowseItems(
+        items: List<BrowseItem>,
+        roots: List<String>,
+        scrollToMediaId: Long?,
+        resumePlayback: Boolean,
+    ) {
+        currentItems = items
+        playableInFolder = items.mapNotNull { it.toPlayable() }
+        browseAdapter.submitList(null)
+        browseAdapter.submitList(items.toList()) {
+            if (scrollToMediaId != null) {
+                scrollBrowseToMedia(scrollToMediaId)
+            }
+        }
+        val folderCount = items.count { it.type == BrowseItemType.FOLDER }
+        val fileCount = items.count { it.type == BrowseItemType.FILE }
+        browse.songCountText.text = getString(R.string.folder_summary, folderCount, fileCount)
+        if (items.isEmpty()) {
+            browse.emptyMessage.text = when {
+                PlaylistPaths.isPlaylistsRoot(currentFolder) ->
+                    getString(R.string.playlists_empty)
+                PlaylistPaths.isFavorites(currentFolder) ->
+                    getString(R.string.favorites_empty)
+                currentFolder.isEmpty() -> {
+                    if (roots.isNotEmpty()) {
+                        getString(R.string.settings_roots_empty)
+                    } else {
+                        getString(R.string.empty_library)
+                    }
+                }
+                else -> getString(R.string.empty_folder)
+            }
+            browse.emptyState.visibility = View.VISIBLE
+            browse.songList.visibility = View.GONE
+        } else {
+            browse.emptyState.visibility = View.GONE
+            browse.songList.visibility = View.VISIBLE
+        }
+        lastState?.let { applyPlayingHighlight(it) }
+        updateSelectionUi()
+        if (resumePlayback && !PlaylistPaths.isPlaylistsRoot(currentFolder)) {
+            maybeResumeFolderPlayback()
         }
     }
 
@@ -2211,6 +2375,7 @@ class MainActivity : AppCompatActivity() {
         private const val MENU_STOP = 5
         private const val MENU_SPEED_BASE = 2000
         private const val MENU_NEW_PLAYLIST = 7
+        private const val MENU_RESCAN = 8
         private const val MENU_PLAYLIST_BASE = 3000
         private const val MENU_PLAYLIST_NEW = 3999
 

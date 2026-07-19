@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/playerBarRoot"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/bg_player_bar"
+    android:elevation="6dp"
+    android:orientation="vertical"
+    android:paddingTop="6dp"
+    android:paddingBottom="8dp">
+
+    <SeekBar
+        android:id="@+id/barSeekBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="16dp"
+        android:max="1000"
+        android:progress="0"
+        android:progressBackgroundTint="#D0E0EC"
+        android:progressTint="?attr/colorPrimary"
+        android:thumbTint="?attr/colorPrimary" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="24dp"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/barPositionText"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="0:00"
+            android:textColor="?attr/colorTextMuted"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/barDurationText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="0:00"
+            android:textColor="?attr/colorTextMuted"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="16dp"
+        android:layout_marginTop="4dp"
+        android:gravity="center"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/barSeekBack60Btn"
+            android:layout_width="0dp"
+            android:layout_height="32dp"
+            android:layout_marginEnd="6dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_seek_chip"
+            android:gravity="center"
+            android:text="@string/seek_back_60"
+            android:textColor="?attr/colorPrimaryVariant"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/barSeekBack5Btn"
+            android:layout_width="0dp"
+            android:layout_height="32dp"
+            android:layout_marginEnd="6dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_seek_chip"
+            android:gravity="center"
+            android:text="@string/seek_back_5"
+            android:textColor="?attr/colorPrimaryVariant"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/barSeekForward5Btn"
+            android:layout_width="0dp"
+            android:layout_height="32dp"
+            android:layout_marginEnd="6dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_seek_chip"
+            android:gravity="center"
+            android:text="@string/seek_forward_5"
+            android:textColor="?attr/colorPrimaryVariant"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/barSeekForward60Btn"
+            android:layout_width="0dp"
+            android:layout_height="32dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_seek_chip"
+            android:gravity="center"
+            android:text="@string/seek_forward_60"
+            android:textColor="?attr/colorPrimaryVariant"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="8dp">
+
+        <ImageButton
+            android:id="@+id/barLoopBtn"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/menu_play_mode"
+            android:padding="10dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_repeat_folder" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:orientation="horizontal">
+
+            <ImageButton
+                android:id="@+id/barPrevBtn"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="@drawable/bg_control_button"
+                android:contentDescription="@string/previous"
+                android:padding="12dp"
+                android:scaleType="centerInside"
+                android:src="@drawable/ic_skip_previous" />
+
+            <ImageButton
+                android:id="@+id/barPlayPauseBtn"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:layout_marginHorizontal="18dp"
+                android:background="@drawable/bg_play_button"
+                android:contentDescription="@string/play"
+                android:padding="16dp"
+                android:scaleType="centerInside"
+                android:src="@drawable/ic_play" />
+
+            <ImageButton
+                android:id="@+id/barNextBtn"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="@drawable/bg_control_button"
+                android:contentDescription="@string/next"
+                android:padding="12dp"
+                android:scaleType="centerInside"
+                android:src="@drawable/ic_skip_next" />
+        </LinearLayout>
+
+        <ImageButton
+            android:id="@+id/barEqBtn"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:layout_marginEnd="2dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/equalizer_title"
+            android:padding="10dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_equalizer" />
+
+        <ImageButton
+            android:id="@+id/barPlaylistBtn"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/playlist_title"
+            android:padding="10dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_playlist" />
+    </LinearLayout>
+</LinearLayout>

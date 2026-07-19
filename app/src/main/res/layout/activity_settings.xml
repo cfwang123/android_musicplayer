@@ -1,0 +1,255 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/white"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:background="@drawable/bg_toolbar"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="8dp">
+
+        <ImageButton
+            android:id="@+id/settingsBackBtn"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/back"
+            android:src="@drawable/ic_back" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:text="@string/settings_title"
+            android:textColor="?attr/colorTextPrimary"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                style="@style/SettingsSection"
+                android:text="@string/settings_section_appearance" />
+
+            <LinearLayout style="@style/SettingsRow">
+                <TextView
+                    style="@style/SettingsLabel"
+                    android:text="@string/settings_theme" />
+                <Spinner
+                    android:id="@+id/spinnerTheme"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minWidth="140dp" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/SettingsRow">
+                <TextView
+                    style="@style/SettingsLabel"
+                    android:text="@string/settings_language" />
+                <Spinner
+                    android:id="@+id/spinnerLanguage"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minWidth="140dp" />
+            </LinearLayout>
+
+            <TextView
+                style="@style/SettingsSection"
+                android:layout_marginTop="16dp"
+                android:text="@string/settings_section_playback" />
+
+            <LinearLayout style="@style/SettingsRow">
+                <TextView
+                    style="@style/SettingsLabel"
+                    android:text="@string/settings_default_mode" />
+                <Spinner
+                    android:id="@+id/spinnerPlayMode"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minWidth="140dp" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/SettingsRow">
+                <TextView
+                    style="@style/SettingsLabel"
+                    android:text="@string/settings_default_speed" />
+                <Spinner
+                    android:id="@+id/spinnerSpeed"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minWidth="100dp" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/SettingsRow">
+                <TextView
+                    style="@style/SettingsLabel"
+                    android:layout_weight="1"
+                    android:text="@string/settings_keep_speed" />
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/switchKeepSpeed"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+            </LinearLayout>
+
+            <TextView
+                style="@style/SettingsSection"
+                android:layout_marginTop="16dp"
+                android:text="@string/settings_section_roots" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="6dp"
+                android:text="@string/settings_roots_hint"
+                android:textColor="?attr/colorTextMuted"
+                android:textSize="12sp" />
+
+            <LinearLayout
+                android:id="@+id/rootFoldersContainer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical" />
+
+            <TextView
+                android:id="@+id/rootFoldersEmpty"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingVertical="8dp"
+                android:text="@string/settings_roots_empty"
+                android:textColor="?attr/colorTextSecondary"
+                android:textSize="14sp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnAddRoot"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="@string/settings_add_root"
+                android:textColor="?attr/colorPrimary" />
+
+            <TextView
+                style="@style/SettingsSection"
+                android:layout_marginTop="16dp"
+                android:text="@string/settings_section_browse" />
+
+            <LinearLayout style="@style/SettingsRow">
+                <TextView
+                    style="@style/SettingsLabel"
+                    android:layout_weight="1"
+                    android:text="@string/settings_auto_locate" />
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/switchAutoLocate"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/SettingsRow">
+                <TextView
+                    style="@style/SettingsLabel"
+                    android:layout_weight="1"
+                    android:text="@string/settings_resume_on_start" />
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/switchResume"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="4dp"
+                android:text="@string/settings_resume_on_start_hint"
+                android:textColor="?attr/colorTextMuted"
+                android:textSize="12sp" />
+
+            <LinearLayout style="@style/SettingsRow">
+                <TextView
+                    style="@style/SettingsLabel"
+                    android:layout_weight="1"
+                    android:text="@string/settings_resume_folder_on_open" />
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/switchResumeFolder"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="4dp"
+                android:text="@string/settings_resume_folder_hint"
+                android:textColor="?attr/colorTextMuted"
+                android:textSize="12sp" />
+
+            <TextView
+                style="@style/SettingsSection"
+                android:layout_marginTop="16dp"
+                android:text="@string/settings_section_lyrics" />
+
+            <LinearLayout style="@style/SettingsRow">
+                <TextView
+                    style="@style/SettingsLabel"
+                    android:layout_weight="1"
+                    android:text="@string/settings_lyric_seek_max" />
+                <Spinner
+                    android:id="@+id/spinnerLyricSeek"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minWidth="100dp" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="@string/settings_lyric_seek_hint"
+                android:textColor="?attr/colorTextMuted"
+                android:textSize="12sp" />
+
+            <TextView
+                style="@style/SettingsSection"
+                android:layout_marginTop="16dp"
+                android:text="@string/settings_section_power" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="6dp"
+                android:text="@string/settings_battery_opt_hint"
+                android:textColor="?attr/colorTextMuted"
+                android:textSize="12sp" />
+
+            <LinearLayout style="@style/SettingsRow">
+                <TextView
+                    android:id="@+id/batteryOptStatus"
+                    style="@style/SettingsLabel"
+                    android:layout_weight="1"
+                    android:text="@string/settings_battery_opt" />
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnBatteryOpt"
+                    style="@style/Widget.MaterialComponents.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/settings_battery_opt_open"
+                    android:textColor="?attr/colorPrimary" />
+            </LinearLayout>
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>

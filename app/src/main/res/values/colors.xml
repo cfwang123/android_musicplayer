@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="white">#FFFFFF</color>
+    <color name="black">#000000</color>
+
+    <!-- 简洁白底 + 淡蓝 -->
+    <color name="primary">#6BAFD9</color>
+    <color name="primary_dark">#4A90B8</color>
+    <color name="primary_light">#A8D4EC</color>
+    <color name="primary_soft">#E8F4FC</color>
+    <color name="primary_bg">#F5FAFD</color>
+    <color name="surface">#FFFFFF</color>
+    <color name="surface_elevated">#F7FAFC</color>
+    <color name="surface_card">#FFFFFF</color>
+    <color name="border">#E2EEF5</color>
+    <color name="border_light">#EEF5FA</color>
+    <color name="text_primary">#2C3E50</color>
+    <color name="text_secondary">#7A8B9A</color>
+    <color name="text_muted">#A8B5C0</color>
+    <color name="player_bg">#FFFFFF</color>
+    <color name="player_text">#2C3E50</color>
+    <color name="player_subtext">#7A8B9A</color>
+    <color name="player_seek">#6BAFD9</color>
+    <color name="ripple_aero">#206BAFD9</color>
+    <color name="item_playing_bg">#E8F4FC</color>
+    <color name="item_playing_text">#3A7CA8</color>
+    <color name="sheet_playing_text">#4A90B8</color>
+    <color name="lyric_sung">#4A90B8</color>
+    <color name="lyric_rest">#8A9BAA</color>
+    <color name="lyric_dim">#B0BCC8</color>
+    <color name="lyric_page_bg">#FFFFFF</color>
+    <color name="lyric_title">#2C3E50</color>
+    <color name="lyric_artist">#7A8B9A</color>
+
+    <!-- 兼容旧名 -->
+    <color name="aero_sky_top">#F5FAFD</color>
+    <color name="aero_sky_mid">#FFFFFF</color>
+    <color name="aero_sky_bottom">#FFFFFF</color>
+    <color name="aero_glass">#FFFFFF</color>
+    <color name="aero_glass_edge">#E2EEF5</color>
+    <color name="aero_lime">#8FBF7A</color>
+    <color name="aero_teal">#6BAFD9</color>
+    <color name="player_bg_top">#FFFFFF</color>
+    <color name="player_bg_bottom">#F5FAFD</color>
+</resources>

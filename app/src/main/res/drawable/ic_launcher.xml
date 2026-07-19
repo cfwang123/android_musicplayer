@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 应用图标：白底 + 淡蓝音乐符 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- 白底 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M0,0h108v108h-108z" />
+
+    <!-- 极浅圆底，增加层次 -->
+    <path
+        android:fillColor="#E8F4FC"
+        android:pathData="M54,54m-36,0a36,36 0,1 1,72 0a36,36 0,1 1,-72 0" />
+
+    <!-- 符杆 + 符头（主音符，左侧） -->
+    <path
+        android:fillColor="#5BA3D4"
+        android:pathData="M44,68c0,4.4 -3.6,8 -8,8s-8,-3.6 -8,-8 3.6,-8 8,-8c1.3,0 2.5,0.3 3.5,0.8V34h4.5v34z" />
+
+    <!-- 右侧音符（略高） -->
+    <path
+        android:fillColor="#5BA3D4"
+        android:pathData="M68,62c0,4.4 -3.6,8 -8,8s-8,-3.6 -8,-8 3.6,-8 8,-8c1.3,0 2.5,0.3 3.5,0.8V28h4.5v34z" />
+
+    <!-- 符梁（连接两根符杆） -->
+    <path
+        android:fillColor="#3D8FBF"
+        android:pathData="M39.5,28h29v6.5h-29z" />
+
+    <!-- 斜梁装饰（双八分音符感） -->
+    <path
+        android:fillColor="#7BB8D9"
+        android:pathData="M39.5,36.5 L68.5,32.5 L68.5,37.5 L39.5,41.5z" />
+</vector>

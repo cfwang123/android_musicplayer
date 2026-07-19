@@ -1,0 +1,72 @@
+# Built application files
+*.apk
+*.ap_
+*.aab
+*.dex
+*.class
+
+# Generated files
+bin/
+gen/
+out/
+outputs/
+release/
+
+# Gradle
+.gradle/
+build/
+**/build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Local configuration (SDK path, etc.)
+local.properties
+
+# Release signing (example file keystore.properties.example may be committed)
+keystore.properties
+release.keystore
+*.jks
+*.keystore
+*.pem
+!debug.keystore
+
+# Android Studio / IntelliJ
+*.iml
+.idea/
+.idea/**
+!.idea/codeStyles/
+captures/
+.externalNativeBuild/
+.cxx/
+*.hprof
+*.iws
+*.ipr
+.navigation/
+
+# Kotlin / compiler
+.kotlin/
+
+# OS junk
+.DS_Store
+Thumbs.db
+Desktop.ini
+ehthumbs.db
+
+# Logs & temp (Agents.md: tmp/ for one-off scripts)
+*.log
+*.tmp
+*.temp
+tmp/
+**/tmp/
+
+# Editor / IDE optional
+.vscode/
+*.swp
+*~
+
+# Node helper (build.js has no local deps currently)
+node_modules/
+
+# Coverage
+.coverage/
+coverage/
+*.exec

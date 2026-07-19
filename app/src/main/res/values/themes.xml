@@ -1,0 +1,194 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- ========== 默认：白底 + 淡蓝 ========== -->
+    <style name="Theme.MusicPlayer" parent="Theme.MaterialComponents.Light.NoActionBar">
+        <item name="colorPrimary">#6BAFD9</item>
+        <item name="colorPrimaryVariant">#4A90B8</item>
+        <item name="colorOnPrimary">@color/white</item>
+        <item name="colorSecondary">#A8D4EC</item>
+        <item name="colorOnSecondary">#2C3E50</item>
+        <item name="android:statusBarColor">#FFFFFF</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:navigationBarColor">#FFFFFF</item>
+        <item name="android:windowBackground">@color/white</item>
+        <item name="materialButtonStyle">@style/Widget.MusicPlayer.Button</item>
+
+        <item name="colorBrowseBgTop">#FFFFFF</item>
+        <item name="colorBrowseBgMid">#FFFFFF</item>
+        <item name="colorBrowseBgBottom">#F7FAFC</item>
+        <item name="colorToolbarStart">#FFFFFF</item>
+        <item name="colorToolbarMid">#FFFFFF</item>
+        <item name="colorToolbarEnd">#FFFFFF</item>
+        <item name="colorToolbarEdge">#E8F0F6</item>
+        <item name="colorSurfaceCard">#FFFFFF</item>
+        <item name="colorBorder">#E2EEF5</item>
+        <item name="colorTextPrimary">#2C3E50</item>
+        <item name="colorTextSecondary">#7A8B9A</item>
+        <item name="colorTextMuted">#A8B5C0</item>
+        <item name="colorAccentSoft">#E8F4FC</item>
+        <item name="colorPlayerBgTop">#FFFFFF</item>
+        <item name="colorPlayerBgMid">#FFFFFF</item>
+        <item name="colorPlayerBgBottom">#F7FAFC</item>
+        <item name="colorPlayerText">#2C3E50</item>
+        <item name="colorPlayerSubtext">#7A8B9A</item>
+        <item name="colorPlayerSeek">#6BAFD9</item>
+        <item name="colorPlayBtnStart">#8FC8E8</item>
+        <item name="colorPlayBtnMid">#6BAFD9</item>
+        <item name="colorPlayBtnEnd">#5A9EC8</item>
+        <item name="colorCoverStart">#D0E8F5</item>
+        <item name="colorCoverMid">#B8DCF0</item>
+        <item name="colorCoverEnd">#A0D0E8</item>
+        <item name="colorItemPlayingBg">#E8F4FC</item>
+        <item name="colorItemPlayingText">#3A7CA8</item>
+        <item name="colorSheetPlaying">#4A90B8</item>
+        <item name="colorLyricBg">#FFFFFF</item>
+        <item name="colorLyricTitle">#2C3E50</item>
+        <item name="colorLyricArtist">#7A8B9A</item>
+        <item name="colorLyricRest">#9AABBA</item>
+        <item name="colorLyricSung">#4A90B8</item>
+        <item name="colorIconTint">#6BAFD9</item>
+        <item name="colorRippleSoft">#206BAFD9</item>
+        <item name="colorChipBg">#E8F4FC</item>
+        <item name="colorChipStroke">#C0DCEC</item>
+        <item name="colorBarBgTop">#FFFFFF</item>
+        <item name="colorBarBgMid">#FFFFFF</item>
+        <item name="colorBarBgBottom">#F7FAFC</item>
+    </style>
+
+    <!-- 墨金：白底 + 淡暖棕点缀 -->
+    <style name="Theme.MusicPlayer.Amber" parent="Theme.MusicPlayer">
+        <item name="colorPrimary">#C4A07A</item>
+        <item name="colorPrimaryVariant">#A88868</item>
+        <item name="colorSecondary">#E0C8A8</item>
+        <item name="colorAccentSoft">#F5EDE4</item>
+        <item name="colorPlayerSeek">#C4A07A</item>
+        <item name="colorPlayBtnStart">#D8C0A0</item>
+        <item name="colorPlayBtnMid">#C4A07A</item>
+        <item name="colorPlayBtnEnd">#B09070</item>
+        <item name="colorCoverStart">#EFE4D8</item>
+        <item name="colorCoverMid">#E0D0BC</item>
+        <item name="colorCoverEnd">#D0C0A8</item>
+        <item name="colorItemPlayingBg">#F5EDE4</item>
+        <item name="colorItemPlayingText">#8A6A48</item>
+        <item name="colorSheetPlaying">#A88868</item>
+        <item name="colorLyricSung">#A88868</item>
+        <item name="colorIconTint">#A88868</item>
+        <item name="colorRippleSoft">#20C4A07A</item>
+        <item name="colorChipBg">#F5EDE4</item>
+        <item name="colorChipStroke">#E0D0BC</item>
+    </style>
+
+    <!-- 翡翠：白底 + 淡青点缀 -->
+    <style name="Theme.MusicPlayer.Teal" parent="Theme.MusicPlayer">
+        <item name="colorPrimary">#6AB8AE</item>
+        <item name="colorPrimaryVariant">#4E9A90</item>
+        <item name="colorSecondary">#A0D8D0</item>
+        <item name="colorAccentSoft">#E6F6F4</item>
+        <item name="colorPlayerSeek">#6AB8AE</item>
+        <item name="colorPlayBtnStart">#90D0C8</item>
+        <item name="colorPlayBtnMid">#6AB8AE</item>
+        <item name="colorPlayBtnEnd">#58A89E</item>
+        <item name="colorCoverStart">#D4EFEA</item>
+        <item name="colorCoverMid">#B8E0D8</item>
+        <item name="colorCoverEnd">#9CD0C8</item>
+        <item name="colorItemPlayingBg">#E6F6F4</item>
+        <item name="colorItemPlayingText">#3A7A72</item>
+        <item name="colorSheetPlaying">#4E9A90</item>
+        <item name="colorLyricSung">#4E9A90</item>
+        <item name="colorIconTint">#4E9A90</item>
+        <item name="colorRippleSoft">#206AB8AE</item>
+        <item name="colorChipBg">#E6F6F4</item>
+        <item name="colorChipStroke">#C0E0DA</item>
+    </style>
+
+    <!-- 暮紫：白底 + 淡紫点缀 -->
+    <style name="Theme.MusicPlayer.Violet" parent="Theme.MusicPlayer">
+        <item name="colorPrimary">#A090D0</item>
+        <item name="colorPrimaryVariant">#8070B0</item>
+        <item name="colorSecondary">#C8C0E8</item>
+        <item name="colorAccentSoft">#F2F0F8</item>
+        <item name="colorPlayerSeek">#A090D0</item>
+        <item name="colorPlayBtnStart">#C0B4E0</item>
+        <item name="colorPlayBtnMid">#A090D0</item>
+        <item name="colorPlayBtnEnd">#9080C0</item>
+        <item name="colorCoverStart">#E8E4F4</item>
+        <item name="colorCoverMid">#D8D0EC</item>
+        <item name="colorCoverEnd">#C8C0E0</item>
+        <item name="colorItemPlayingBg">#F2F0F8</item>
+        <item name="colorItemPlayingText">#6050A0</item>
+        <item name="colorSheetPlaying">#8070B0</item>
+        <item name="colorLyricSung">#8070B0</item>
+        <item name="colorIconTint">#8070B0</item>
+        <item name="colorRippleSoft">#20A090D0</item>
+        <item name="colorChipBg">#F2F0F8</item>
+        <item name="colorChipStroke">#D8D0EC</item>
+    </style>
+
+    <!-- 暗夜：浅灰白底 + 冷蓝（仍以浅色为主，略偏灰） -->
+    <style name="Theme.MusicPlayer.Dark" parent="Theme.MusicPlayer">
+        <item name="colorPrimary">#7AA8D4</item>
+        <item name="colorPrimaryVariant">#5A8AB8</item>
+        <item name="android:statusBarColor">#F0F2F5</item>
+        <item name="android:navigationBarColor">#F0F2F5</item>
+        <item name="colorBrowseBgTop">#F0F2F5</item>
+        <item name="colorBrowseBgMid">#F5F6F8</item>
+        <item name="colorBrowseBgBottom">#FFFFFF</item>
+        <item name="colorPlayerBgTop">#F0F2F5</item>
+        <item name="colorPlayerBgMid">#F5F6F8</item>
+        <item name="colorPlayerBgBottom">#FFFFFF</item>
+        <item name="colorBarBgTop">#F5F6F8</item>
+        <item name="colorBarBgMid">#FFFFFF</item>
+        <item name="colorBarBgBottom">#FFFFFF</item>
+        <item name="colorAccentSoft">#E8EEF5</item>
+        <item name="colorPlayerSeek">#7AA8D4</item>
+        <item name="colorPlayBtnStart">#A0C0DC</item>
+        <item name="colorPlayBtnMid">#7AA8D4</item>
+        <item name="colorPlayBtnEnd">#6A98C4</item>
+        <item name="colorCoverStart">#D8E2EC</item>
+        <item name="colorCoverMid">#C0D0E0</item>
+        <item name="colorCoverEnd">#A8C0D4</item>
+        <item name="colorItemPlayingBg">#E8EEF5</item>
+        <item name="colorItemPlayingText">#3A6A98</item>
+        <item name="colorSheetPlaying">#5A8AB8</item>
+        <item name="colorLyricBg">#F5F6F8</item>
+        <item name="colorLyricSung">#5A8AB8</item>
+        <item name="colorIconTint">#5A8AB8</item>
+        <item name="colorRippleSoft">#207AA8D4</item>
+        <item name="colorChipBg">#E8EEF5</item>
+        <item name="colorChipStroke">#C8D4E0</item>
+    </style>
+
+    <style name="Widget.MusicPlayer.Button" parent="Widget.MaterialComponents.Button">
+        <item name="backgroundTint">?attr/colorPrimary</item>
+        <item name="cornerRadius">8dp</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textColor">@color/white</item>
+    </style>
+
+    <style name="SettingsSection">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginBottom">8dp</item>
+        <item name="android:textColor">?attr/colorPrimaryVariant</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <style name="SettingsRow">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:gravity">center_vertical</item>
+        <item name="android:minHeight">48dp</item>
+        <item name="android:orientation">horizontal</item>
+        <item name="android:paddingVertical">6dp</item>
+    </style>
+
+    <style name="SettingsLabel">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:textColor">?attr/colorTextPrimary</item>
+        <item name="android:textSize">15sp</item>
+    </style>
+</resources>

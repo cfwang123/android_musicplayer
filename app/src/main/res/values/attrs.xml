@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 主题皮肤可切换色 -->
+    <attr name="colorBrowseBgTop" format="color" />
+    <attr name="colorBrowseBgMid" format="color" />
+    <attr name="colorBrowseBgBottom" format="color" />
+    <attr name="colorToolbarStart" format="color" />
+    <attr name="colorToolbarMid" format="color" />
+    <attr name="colorToolbarEnd" format="color" />
+    <attr name="colorToolbarEdge" format="color" />
+    <attr name="colorSurfaceCard" format="color" />
+    <attr name="colorBorder" format="color" />
+    <attr name="colorTextPrimary" format="color" />
+    <attr name="colorTextSecondary" format="color" />
+    <attr name="colorTextMuted" format="color" />
+    <attr name="colorAccentSoft" format="color" />
+    <attr name="colorPlayerBgTop" format="color" />
+    <attr name="colorPlayerBgMid" format="color" />
+    <attr name="colorPlayerBgBottom" format="color" />
+    <attr name="colorPlayerText" format="color" />
+    <attr name="colorPlayerSubtext" format="color" />
+    <attr name="colorPlayerSeek" format="color" />
+    <attr name="colorPlayBtnStart" format="color" />
+    <attr name="colorPlayBtnMid" format="color" />
+    <attr name="colorPlayBtnEnd" format="color" />
+    <attr name="colorCoverStart" format="color" />
+    <attr name="colorCoverMid" format="color" />
+    <attr name="colorCoverEnd" format="color" />
+    <attr name="colorItemPlayingBg" format="color" />
+    <attr name="colorItemPlayingText" format="color" />
+    <attr name="colorSheetPlaying" format="color" />
+    <attr name="colorLyricBg" format="color" />
+    <attr name="colorLyricTitle" format="color" />
+    <attr name="colorLyricArtist" format="color" />
+    <attr name="colorLyricRest" format="color" />
+    <attr name="colorLyricSung" format="color" />
+    <attr name="colorIconTint" format="color" />
+    <attr name="colorRippleSoft" format="color" />
+    <attr name="colorChipBg" format="color" />
+    <attr name="colorChipStroke" format="color" />
+    <attr name="colorBarBgTop" format="color" />
+    <attr name="colorBarBgMid" format="color" />
+    <attr name="colorBarBgBottom" format="color" />
+</resources>

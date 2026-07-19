@@ -78,6 +78,130 @@ class FolderBrowser(private val context: Context) {
     }
 
     /**
+     * 按 mediaId 列表解析为 [BrowseItem]（保持传入顺序）。
+     * video 的 mediaId 带 [VIDEO_ID_FLAG]；找不到的 id 跳过。
+     * [listFolderPath] 写入每项的 folderPath（虚拟列表路径）。
+     */
+    suspend fun resolveMediaIds(
+        mediaIds: List<Long>,
+        listFolderPath: String,
+    ): List<BrowseItem> = withContext(Dispatchers.IO) {
+        if (mediaIds.isEmpty()) return@withContext emptyList()
+        val map = mutableMapOf<Long, BrowseItem>()
+        val audioIds = mediaIds.filter { it and VIDEO_ID_FLAG == 0L }
+        val videoIds = mediaIds.filter { it and VIDEO_ID_FLAG != 0L }.map { it and VIDEO_ID_FLAG.inv() }
+        if (audioIds.isNotEmpty()) {
+            loadMediaByIds(
+                collection = audioCollection(),
+                storeIds = audioIds,
+                isVideo = false,
+                listFolderPath = listFolderPath,
+                out = map,
+            )
+        }
+        if (videoIds.isNotEmpty()) {
+            loadMediaByIds(
+                collection = videoCollection(),
+                storeIds = videoIds,
+                isVideo = true,
+                listFolderPath = listFolderPath,
+                out = map,
+            )
+        }
+        mediaIds.mapNotNull { map[it] }
+    }
+
+    private fun loadMediaByIds(
+        collection: Uri,
+        storeIds: List<Long>,
+        isVideo: Boolean,
+        listFolderPath: String,
+        out: MutableMap<Long, BrowseItem>,
+    ) {
+        // MediaStore IN 查询分批，避免过长
+        storeIds.chunked(80).forEach { chunk ->
+            val placeholders = chunk.joinToString(",") { "?" }
+            val selection = MediaStore.MediaColumns._ID + " IN ($placeholders)"
+            val args = chunk.map { it.toString() }.toTypedArray()
+            val projection = arrayOf(
+                MediaStore.MediaColumns._ID,
+                MediaStore.MediaColumns.DISPLAY_NAME,
+                MediaStore.MediaColumns.TITLE,
+                MediaStore.MediaColumns.DURATION,
+                MediaStore.MediaColumns.RELATIVE_PATH,
+                MediaStore.MediaColumns.DATA,
+            ) + if (!isVideo) {
+                arrayOf(MediaStore.Audio.Media.ARTIST, MediaStore.Audio.Media.IS_MUSIC)
+            } else {
+                arrayOf(MediaStore.Video.Media.ARTIST)
+            }
+            runCatching {
+                context.contentResolver.query(
+                    collection,
+                    projection,
+                    selection,
+                    args,
+                    null,
+                )?.use { cursor ->
+                    val idCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID)
+                    val displayCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DISPLAY_NAME)
+                    val titleCol = cursor.getColumnIndex(MediaStore.MediaColumns.TITLE)
+                    val durationCol = cursor.getColumnIndex(MediaStore.MediaColumns.DURATION)
+                    val pathCol = cursor.getColumnIndex(MediaStore.MediaColumns.RELATIVE_PATH)
+                    val dataCol = cursor.getColumnIndex(MediaStore.MediaColumns.DATA)
+                    val artistCol = cursor.getColumnIndex(
+                        if (isVideo) MediaStore.Video.Media.ARTIST else MediaStore.Audio.Media.ARTIST,
+                    )
+                    val isMusicCol = if (!isVideo) {
+                        cursor.getColumnIndex(MediaStore.Audio.Media.IS_MUSIC)
+                    } else {
+                        -1
+                    }
+                    while (cursor.moveToNext()) {
+                        if (isMusicCol >= 0 && cursor.getInt(isMusicCol) == 0) continue
+                        val storeId = cursor.getLong(idCol)
+                        val mediaId = if (isVideo) storeId or VIDEO_ID_FLAG else storeId
+                        val displayName = cursor.getString(displayCol)
+                        val title = if (titleCol >= 0) cursor.getString(titleCol) else null
+                        val name = displayName?.takeIf { it.isNotBlank() }
+                            ?: title?.takeIf { it.isNotBlank() }
+                            ?: "未命名"
+                        val artist = if (artistCol >= 0) cursor.getString(artistCol) else null
+                        val subtitle = when {
+                            isVideo -> "视频 · 仅声音"
+                            !artist.isNullOrBlank() && !artist.equals("<unknown>", true) -> artist
+                            else -> "音频"
+                        }
+                        val relative = if (pathCol >= 0) {
+                            normalizeFolder(cursor.getString(pathCol).orEmpty())
+                        } else {
+                            ""
+                        }
+                        val data = if (dataCol >= 0) cursor.getString(dataCol) else null
+                        val durationMs = if (durationCol >= 0) {
+                            cursor.getLong(durationCol).coerceAtLeast(0L)
+                        } else {
+                            0L
+                        }
+                        val uri = ContentUris.withAppendedId(collection, storeId)
+                        out[mediaId] = BrowseItem(
+                            type = BrowseItemType.FILE,
+                            name = name,
+                            folderPath = listFolderPath,
+                            uri = uri,
+                            mediaId = mediaId,
+                            durationMs = durationMs,
+                            isVideo = isVideo,
+                            subtitle = subtitle,
+                            filePath = resolveFilePath(data, relative, displayName),
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    /**
      * 同级下一个「有直接媒体」的文件夹及其曲目。
      * 到最后一个后回到第一个；若仅有一个则返回自身（相当于文件夹循环）。
      */
@@ -371,7 +495,8 @@ class FolderBrowser(private val context: Context) {
     }
 
     companion object {
-        private const val VIDEO_ID_FLAG = 1L shl 62
+        /** 与浏览列表一致：视频 mediaId 高位置位 */
+        const val VIDEO_ID_FLAG = 1L shl 62
 
         fun normalizeFolder(path: String?): String {
             if (path.isNullOrBlank()) return ""

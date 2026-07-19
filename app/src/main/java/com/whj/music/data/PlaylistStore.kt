@@ -265,6 +265,8 @@ object PlaylistStore {
 /** 虚拟路径：播放列表空间 */
 object PlaylistPaths {
     const val ROOT = "__playlists__/"
+    /** 固定入口：收藏歌曲（非用户自建列表） */
+    const val FAVORITES_ID = "__favorites__"
 
     fun normalize(path: String): String = FolderBrowser.normalizeFolder(path)
 
@@ -275,13 +277,23 @@ object PlaylistPaths {
 
     fun isPlaylistsRoot(path: String): Boolean = normalize(path) == ROOT
 
-    /** 当前是否在某个具体播放列表内（非列表总览） */
+    fun favoritesPath(): String = ofPlaylist(FAVORITES_ID)
+
+    fun isFavorites(path: String): Boolean = playlistIdOf(path) == FAVORITES_ID
+
+    /** 当前是否在某个具体播放列表内（非列表总览；含收藏歌曲） */
     fun playlistIdOf(path: String): String? {
         val n = normalize(path)
         if (!n.startsWith(ROOT) || n == ROOT) return null
         val rest = n.removePrefix(ROOT).trim('/')
         if (rest.isEmpty() || rest.contains('/')) return null
         return rest
+    }
+
+    /** 用户自建列表（不含「收藏歌曲」） */
+    fun isUserPlaylist(path: String): Boolean {
+        val id = playlistIdOf(path) ?: return false
+        return id != FAVORITES_ID
     }
 
     fun ofPlaylist(id: String): String = ROOT + id.trim('/') + "/"

@@ -34,6 +34,7 @@ const HELP = `
 
 命令:
   build     编译 APK（默认 release）
+  release   编译 release 包（assembleRelease）
   rebuild   清理后重新编译（clean + build）
   clean     清理构建产物
   run       安装到真机并启动（debug 包，与 release 同签名时可保留数据）
@@ -48,6 +49,7 @@ const HELP = `
   -s <serial> run / install 时指定设备序列号
 
 示例:
+  node build.js release
   node build.js build --debug
   node build.js run
   node build.js install
@@ -435,6 +437,10 @@ if (!command) {
 switch (command) {
   case 'build':
     build(variant);
+    break;
+  case 'release':
+    // 始终编译 release，等价于 build --release
+    build('release');
     break;
   case 'rebuild':
     rebuild(variant);

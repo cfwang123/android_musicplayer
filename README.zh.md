@@ -2,7 +2,7 @@
 
 本机媒体文件夹浏览与后台播放的 Android 应用。
 
-[English](README.md) · 更细的开发说明见 [DEVELOPMENT.md](DEVELOPMENT.md)
+[English](README.md)
 
 ## 截图
 
@@ -18,11 +18,17 @@
 
 ## 简介
 
-- **包名**：`com.whj.music`
-- **语言**：Kotlin
-- **minSdk 24** / **targetSdk 34**
-- **版本**：1.0.1（`versionCode` 2）
-- **构建**：Gradle 8.4 + AGP 8.3.2，JDK 17
+| 项 | 说明 |
+|----|------|
+| 包名 | `com.whj.music` |
+| 应用名 | 音乐播放器 |
+| 语言 | Kotlin |
+| minSdk | 24（Android 7.0+） |
+| targetSdk / compileSdk | 34 |
+| 版本 | 1.0.1（`versionCode` 2） |
+| 构建 | Gradle 8.4 + AGP 8.3.2 |
+| JDK | 17（可在本机 `gradle.properties` 配置 `org.gradle.java.home`，真实路径勿提交） |
+| 路径 | 目录名含中文时需 `android.overridePathCheck=true`（已配置） |
 
 ## 主要功能
 
@@ -34,7 +40,7 @@
 | 播放列表 | 用户自建列表；加入 / 移出 / 拖动排序；列表数据本地持久化 |
 | 多选操作 | 1 屏长按多选：批量加入列表、批量删除文件；列表内批量移出 |
 | 播放模式 | 单曲 / 文件夹循环 / 下一文件夹 / 随机 |
-| 进度记忆 | 全局上次曲目；按文件夹记忆；启动定位 |
+| 进度记忆 | 全局上次曲目；按文件夹记忆；启动定位；1 屏切歌时自动定位文件夹与文件 |
 | 歌词 | 同目录同名 `.lrc`，卡拉 OK 进度、滚动跳转 |
 | 定时关闭 / 倍速 | 支持 |
 | 收藏 | 列表与播放页红心 |
@@ -53,38 +59,80 @@
 
 播放列表仅保存引用与顺序，删除列表不会删除设备上的媒体文件。
 
+### 播放说明
+
+- 扫描本机音频/视频（MediaStore），点击曲目播放  
+- 底栏：上一首 / 播放暂停 / 下一首、进度、循环模式、均衡器、当前队列  
+- 前台服务 + 通知栏 / 锁屏媒体控制  
+- 权限：  
+  - Android 13+：`READ_MEDIA_AUDIO`、`READ_MEDIA_VIDEO`、`POST_NOTIFICATIONS`  
+  - 更低版本：`READ_EXTERNAL_STORAGE`  
+- 首次启动需在系统弹窗中授予媒体（及通知）权限  
+
 ## 快速开始
 
-### 环境
+### 本机配置（勿提交密钥与本机路径）
 
-- Android SDK（API 34）
-- JDK 17
-- `adb` 在 PATH 中
-- 真机开启 USB 调试（安装需允许「USB 安装」）
-
-配置 `local.properties`（本机路径，已在 `.gitignore` 中忽略）：
+1. 创建 `local.properties`（已在 `.gitignore` 中忽略）：
 
 ```properties
 sdk.dir=你的/Android/Sdk路径
 ```
+
+2. JDK 17：设置 `JAVA_HOME` / PATH，或在**本机** `gradle.properties` 中设置 `org.gradle.java.home`（勿提交真实路径）。  
+3. `adb` 在 PATH 中（或使用 SDK `platform-tools`）。真机开启 USB 调试。
+
+```powershell
+java -version
+adb devices
+```
+
+### Android Studio
+
+本仓库为标准 Android Gradle 工程（AGP 8.3.2、Gradle 8.4、Kotlin），**可用 Android Studio 直接打开、同步、编译与运行**。`build.js` / `gradlew` 只是命令行辅助，与 AS 使用同一套工程。
+
+1. **File → Open** 打开工程根目录（含 `settings.gradle.kts` 的目录，不要只打开 `app/`）。
+2. 等待 **Gradle Sync** 完成。
+3. 选择 debug 变体 → **Run** 到真机/模拟器，或使用 **Build → Make Project** / **Build APK(s)**。
+
+说明：
+
+| 项 | 说明 |
+|----|------|
+| Android Studio 版本 | 建议 **Hedgehog / Iguana 及以后**（支持 AGP 8.3） |
+| Gradle JDK | **Settings → Build → Gradle → Gradle JDK** 选择 **JDK 17** |
+| `org.gradle.java.home` | 若本机 `gradle.properties` 里配置了该项，会覆盖 IDE 的 JDK；路径错误会导致 Sync 失败，可改正或删掉 |
+| `local.properties` | AS 首次打开时一般会自动写入 `sdk.dir` |
+| 中文路径 | 已配置 `android.overridePathCheck=true`；若仍异常，可尝试放到纯英文路径 |
+| 签名 | 配置 `keystore.properties` + `release.keystore` 后，debug/release 可共用签名，便于覆盖安装保留数据 |
 
 ### 用脚本（推荐）
 
 在项目根目录 `music-player/`：
 
 ```powershell
+# 编译 release（assembleRelease）
+node build.js release
+
 # 按源码修改时间决定是否编 release，再安装并启动
 node build.js install
 
 # 强制重新编译 release 后安装
 node build.js install --force
 
-# 仅编译 release / debug
+# 仅编译 release / debug（build 默认 release）
 node build.js build --release
 node build.js build --debug
 
+# 清理 / 重建
+node build.js clean
+node build.js rebuild --debug
+
 # 编译 debug 并安装启动
 node build.js run
+
+# 多设备时指定序列号
+node build.js run -s 你的序列号
 
 # 列出设备
 node build.js devices
@@ -95,28 +143,64 @@ node build.js devices
 ```powershell
 .\gradlew.bat assembleDebug
 .\gradlew.bat assembleRelease
+.\gradlew.bat installDebug
+adb shell am start -n com.whj.music/.MainActivity
 adb install -r app\build\outputs\apk\release\music1.0.1.apk
+```
+
+成功后 APK 大致位置：
+
+```
+app/build/outputs/apk/debug/app-debug.apk
+app/build/outputs/apk/release/music1.0.1.apk
 ```
 
 Release 使用 `keystore.properties` + `release.keystore` 签名（与 debug 共用时可覆盖安装保留数据）；密钥文件勿提交仓库，见 `keystore.properties.example`。
 
-## 目录结构（简要）
+### 日常改代码流程
+
+1. 改 `app/src/main/...` 源码或资源  
+2. `node build.js build --debug` 或 `.\gradlew.bat assembleDebug`  
+3. `node build.js run` 装到手机并启动  
+4. `adb logcat` 看崩溃与日志  
+
+增量编译一般只需 `assembleDebug` / `installDebug`，不必每次 `clean`。
+
+### logcat / 卸载
+
+```powershell
+adb logcat --pid=$(adb shell pidof -s com.whj.music)
+adb logcat | Select-String "whj.music|AndroidRuntime"
+adb uninstall com.whj.music
+```
+
+## 目录结构
 
 ```
 music-player/
-├── app/src/main/
-│   ├── java/com/whj/music/
-│   │   ├── data/            # 浏览、收藏、播放列表、设置等
-│   │   ├── player/          # 前台服务、均衡器
-│   │   ├── ui/              # 列表适配器等
-│   │   └── MainActivity.kt
-│   └── res/                 # 布局、主题、多语言
-├── screenshots/             # 界面截图（README 展示）
-├── build.js                 # 构建 / 安装脚本
-├── DEVELOPMENT.md           # 详细开发笔记
+├── app/
+│   ├── build.gradle.kts
+│   └── src/main/
+│       ├── AndroidManifest.xml
+│       ├── java/com/whj/music/
+│       │   ├── MusicApp.kt
+│       │   ├── MainActivity.kt
+│       │   ├── data/            # 浏览、收藏、播放列表、设置等
+│       │   ├── player/          # 前台服务、均衡器
+│       │   ├── ui/              # 列表适配器等
+│       │   └── …
+│       └── res/                 # 布局、主题、多语言
+├── screenshots/                 # 界面截图（README 展示）
+├── gradle/wrapper/
+├── build.gradle.kts
+├── settings.gradle.kts
+├── gradle.properties
+├── local.properties             # 本机 SDK，勿提交
+├── gradlew.bat
+├── build.js
 ├── keystore.properties.example
-├── README.md                # 本文件（中文）
-└── README_en.md             # English
+├── README.md                    # 英文
+└── README.zh.md                 # 中文（本文件）
 ```
 
 ## 权限说明
@@ -129,6 +213,26 @@ music-player/
 | 可选忽略电池优化 | 降低息屏被杀概率 |
 
 Android 11+ 批量删除文件会走系统确认对话框。
+
+## 常见问题
+
+### 找不到 SDK
+
+检查 `local.properties` 中 `sdk.dir` 是否与本机一致。
+
+### Gradle 使用错误 JDK
+
+安装 JDK 17 并设置 `JAVA_HOME`，或在**本机** `gradle.properties` 中配置 `org.gradle.java.home`（勿提交本机绝对路径）。
+
+### adb 无设备
+
+- 手机开启开发者选项与 USB 调试  
+- 换线/口，授权调试弹窗  
+- `adb kill-server` 后重试 `adb devices`  
+
+### 列表为空
+
+手机上无音频文件，或未授予读取权限。点「授予权限」或右上角刷新。
 
 ## 许可证
 

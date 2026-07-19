@@ -143,6 +143,9 @@
 
     <string name="playlists_title">播放列表</string>
     <string name="playlists_empty">还没有播放列表</string>
+    <string name="favorites_songs">收藏歌曲</string>
+    <string name="favorites_empty">还没有收藏的歌曲</string>
+    <string name="remove_from_favorites">取消收藏</string>
     <string name="playlist_new">新播放列表</string>
     <string name="playlist_new_title">新建播放列表</string>
     <string name="playlist_new_hint">列表名称</string>

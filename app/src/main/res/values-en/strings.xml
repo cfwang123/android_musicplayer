@@ -133,6 +133,9 @@
 
     <string name="playlists_title">Playlists</string>
     <string name="playlists_empty">No playlists yet</string>
+    <string name="favorites_songs">Favorites</string>
+    <string name="favorites_empty">No favorite tracks yet</string>
+    <string name="remove_from_favorites">Unfavorite</string>
     <string name="playlist_new">New playlist</string>
     <string name="playlist_new_title">New playlist</string>
     <string name="playlist_new_hint">Playlist name</string>

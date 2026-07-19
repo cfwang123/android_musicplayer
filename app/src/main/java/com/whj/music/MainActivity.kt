@@ -454,7 +454,7 @@ class MainActivity : AppCompatActivity() {
                 viewHolder: RecyclerView.ViewHolder,
                 target: RecyclerView.ViewHolder,
             ): Boolean {
-                if (!selectionMode || !isInsideUserPlaylist()) return false
+                if (!selectionMode || !isReorderableList()) return false
                 val from = viewHolder.bindingAdapterPosition
                 val to = target.bindingAdapterPosition
                 if (from == RecyclerView.NO_POSITION || to == RecyclerView.NO_POSITION) return false
@@ -492,6 +492,10 @@ class MainActivity : AppCompatActivity() {
         showToast(
             getString(if (favorited) R.string.favorite_added else R.string.favorite_removed),
         )
+        // 在「收藏歌曲」列表内取消收藏后刷新列表
+        if (!favorited && item.type == BrowseItemType.FILE && PlaylistPaths.isFavorites(currentFolder)) {
+            loadFolder(currentFolder)
+        }
     }
 
     private fun onCurrentTrackFavoriteToggle() {
@@ -505,6 +509,9 @@ class MainActivity : AppCompatActivity() {
         showToast(
             getString(if (favorited) R.string.favorite_added else R.string.favorite_removed),
         )
+        if (!favorited && PlaylistPaths.isFavorites(currentFolder)) {
+            loadFolder(currentFolder)
+        }
     }
 
     private fun refreshFavoritesUi() {
@@ -1222,15 +1229,18 @@ class MainActivity : AppCompatActivity() {
 
     // region 多选与播放列表
 
-    private fun isInsideUserPlaylist(): Boolean = PlaylistPaths.playlistIdOf(currentFolder) != null
+    /** 用户自建列表或「收藏歌曲」：可多选移出、拖动排序 */
+    private fun isReorderableList(): Boolean =
+        PlaylistPaths.isUserPlaylist(currentFolder) || PlaylistPaths.isFavorites(currentFolder)
 
     private fun isPlaylistsRoot(): Boolean = PlaylistPaths.isPlaylistsRoot(currentFolder)
 
     private fun isItemSelectable(item: BrowseItem): Boolean {
         return when (item.type) {
             BrowseItemType.FILE -> true
+            // 播放列表总览仅可选中用户列表（不可删「收藏歌曲」入口）
             BrowseItemType.FOLDER -> isPlaylistsRoot() &&
-                PlaylistPaths.playlistIdOf(item.folderPath) != null
+                PlaylistPaths.isUserPlaylist(item.folderPath)
         }
     }
 
@@ -1280,17 +1290,23 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateSelectionUi() {
         if (!::browse.isInitialized || !::browseAdapter.isInitialized) return
-        val inPlaylist = isInsideUserPlaylist()
+        val reorderable = isReorderableList()
+        val inFavorites = PlaylistPaths.isFavorites(currentFolder)
         val playlistsRoot = isPlaylistsRoot()
         browse.selectionBar.visibility = if (selectionMode) View.VISIBLE else View.GONE
         browse.selectionCountText.text = getString(R.string.selection_count, selectedKeys.size)
-        // 播放列表内容：移出 + 拖动；播放列表总览：删除列表；普通目录：加入列表 + 删文件
+        // 列表/收藏：移出 + 拖动；总览：删列表；普通目录：加入列表 + 删文件
         browse.selectionAddPlaylistBtn.visibility =
-            if (selectionMode && !inPlaylist && !playlistsRoot) View.VISIBLE else View.GONE
+            if (selectionMode && !reorderable && !playlistsRoot) View.VISIBLE else View.GONE
         browse.selectionRemovePlaylistBtn.visibility =
-            if (selectionMode && inPlaylist) View.VISIBLE else View.GONE
+            if (selectionMode && reorderable) View.VISIBLE else View.GONE
+        browse.selectionRemovePlaylistBtn.text = if (inFavorites) {
+            getString(R.string.remove_from_favorites)
+        } else {
+            getString(R.string.remove_from_playlist)
+        }
         browse.selectionDeleteBtn.visibility =
-            if (selectionMode && !inPlaylist) View.VISIBLE else View.GONE
+            if (selectionMode && !reorderable) View.VISIBLE else View.GONE
         browse.selectionDeleteBtn.text = if (playlistsRoot) {
             getString(R.string.playlist_delete)
         } else {
@@ -1299,8 +1315,8 @@ class MainActivity : AppCompatActivity() {
         browseAdapter.setSelectionState(
             enabled = selectionMode,
             selected = selectedKeys.toSet(),
-            dragEnabled = selectionMode && inPlaylist,
-            // 播放列表总览下文件夹可长按多选（删除列表）
+            dragEnabled = selectionMode && reorderable,
+            // 播放列表总览下用户列表可长按多选（删除列表）
             foldersSelectable = playlistsRoot,
         )
     }
@@ -1393,13 +1409,21 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun removeSelectedFromPlaylist() {
-        val playlistId = PlaylistPaths.playlistIdOf(currentFolder) ?: return
         val files = selectedFileItems()
         if (files.isEmpty()) {
             showToast(getString(R.string.selection_empty))
             return
         }
         val ids = files.map { it.mediaId }.toSet()
+        if (PlaylistPaths.isFavorites(currentFolder)) {
+            val removed = FavoriteStore.removeMediaIds(this, ids)
+            showToast(getString(R.string.playlist_removed, removed))
+            exitSelectionMode()
+            refreshFavoritesUi()
+            loadFolder(currentFolder)
+            return
+        }
+        val playlistId = PlaylistPaths.playlistIdOf(currentFolder) ?: return
         val removed = PlaylistStore.removeTracks(this, playlistId, ids)
         showToast(getString(R.string.playlist_removed, removed))
         exitSelectionMode()
@@ -1501,10 +1525,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun persistPlaylistOrder() {
-        val playlistId = PlaylistPaths.playlistIdOf(currentFolder) ?: return
         val orderedIds = currentItems
             .filter { it.type == BrowseItemType.FILE }
             .map { it.mediaId }
+        if (PlaylistPaths.isFavorites(currentFolder)) {
+            FavoriteStore.setMediaOrder(this, orderedIds)
+            return
+        }
+        val playlistId = PlaylistPaths.playlistIdOf(currentFolder) ?: return
+        if (playlistId == PlaylistPaths.FAVORITES_ID) return
         PlaylistStore.setTrackOrder(this, playlistId, orderedIds)
     }
 
@@ -1520,7 +1549,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun listPlaylistsAsBrowseItems(): List<BrowseItem> {
-        return PlaylistStore.list(this).map { pl ->
+        val favCount = FavoriteStore.mediaCount(this)
+        val favorites = BrowseItem(
+            type = BrowseItemType.FOLDER,
+            name = getString(R.string.favorites_songs),
+            folderPath = PlaylistPaths.favoritesPath(),
+            directFileCount = favCount,
+            subtitle = getString(R.string.folder_song_count, favCount),
+        )
+        val lists = PlaylistStore.list(this).map { pl ->
             BrowseItem(
                 type = BrowseItemType.FOLDER,
                 name = pl.name,
@@ -1529,12 +1566,19 @@ class MainActivity : AppCompatActivity() {
                 subtitle = getString(R.string.folder_song_count, pl.tracks.size),
             )
         }
+        return listOf(favorites) + lists
     }
 
     private fun listPlaylistTracks(playlistId: String): List<BrowseItem> {
         val path = PlaylistPaths.ofPlaylist(playlistId)
         val pl = PlaylistStore.get(this, playlistId) ?: return emptyList()
         return pl.tracks.map { it.toBrowseItem(path) }
+    }
+
+    private suspend fun listFavoriteTracks(): List<BrowseItem> {
+        val path = PlaylistPaths.favoritesPath()
+        val ids = FavoriteStore.mediaIdsOrdered(this)
+        return browser.resolveMediaIds(ids, path)
     }
 
     // endregion
@@ -1587,7 +1631,8 @@ class MainActivity : AppCompatActivity() {
                 val roots = AppSettings.rootFolders(this@MainActivity)
                 currentItems = when {
                     PlaylistPaths.isPlaylistsRoot(currentFolder) -> listPlaylistsAsBrowseItems()
-                    PlaylistPaths.playlistIdOf(currentFolder) != null -> {
+                    PlaylistPaths.isFavorites(currentFolder) -> listFavoriteTracks()
+                    PlaylistPaths.isUserPlaylist(currentFolder) -> {
                         listPlaylistTracks(PlaylistPaths.playlistIdOf(currentFolder)!!)
                     }
                     currentFolder.isEmpty() && roots.isNotEmpty() -> {
@@ -1613,6 +1658,8 @@ class MainActivity : AppCompatActivity() {
                     browse.emptyMessage.text = when {
                         PlaylistPaths.isPlaylistsRoot(currentFolder) ->
                             getString(R.string.playlists_empty)
+                        PlaylistPaths.isFavorites(currentFolder) ->
+                            getString(R.string.favorites_empty)
                         currentFolder.isEmpty() -> {
                             if (roots.isNotEmpty()) {
                                 getString(R.string.settings_roots_empty)
@@ -1717,7 +1764,12 @@ class MainActivity : AppCompatActivity() {
                 browse.titleText.text = getString(R.string.playlists_title)
                 browse.pathText.text = getString(R.string.playlists_title)
             }
-            PlaylistPaths.playlistIdOf(currentFolder) != null -> {
+            PlaylistPaths.isFavorites(currentFolder) -> {
+                val name = getString(R.string.favorites_songs)
+                browse.titleText.text = name
+                browse.pathText.text = getString(R.string.playlists_title) + " / " + name
+            }
+            PlaylistPaths.isUserPlaylist(currentFolder) -> {
                 val id = PlaylistPaths.playlistIdOf(currentFolder)!!
                 val name = PlaylistStore.get(this, id)?.name
                     ?: getString(R.string.playlists_title)

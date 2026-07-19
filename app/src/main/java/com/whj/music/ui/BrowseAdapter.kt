@@ -95,15 +95,15 @@ class BrowseAdapter(
             val selectable = item.type == BrowseItemType.FILE ||
                 (item.type == BrowseItemType.FOLDER && foldersSelectable)
 
-            val isPlaying = when (item.type) {
+            // 多选时不显示“正在播放”高亮，只保留勾选态
+            val isPlaying = !selectionMode && when (item.type) {
                 BrowseItemType.FOLDER ->
                     playingFolderPath.isNotEmpty() && item.folderPath == playingFolderPath
                 BrowseItemType.FILE ->
                     playingMediaId != null && item.mediaId == playingMediaId
             }
 
-            binding.playingBar.visibility =
-                if (isPlaying && !selectionMode) View.VISIBLE else View.GONE
+            binding.playingBar.visibility = if (isPlaying) View.VISIBLE else View.GONE
             binding.itemRoot.setBackgroundResource(
                 when {
                     selected -> R.drawable.bg_item_selected
@@ -114,11 +114,7 @@ class BrowseAdapter(
             binding.titleText.setTextColor(
                 AppTheme.resolveColor(
                     ctx,
-                    if (isPlaying && !selected) {
-                        R.attr.colorItemPlayingText
-                    } else {
-                        R.attr.colorTextPrimary
-                    },
+                    if (isPlaying) R.attr.colorItemPlayingText else R.attr.colorTextPrimary,
                 ),
             )
             binding.artistText.setTextColor(

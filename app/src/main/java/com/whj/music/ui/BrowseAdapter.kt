@@ -1,18 +1,28 @@
 package com.whj.music.ui
 
 import android.annotation.SuppressLint
+import android.graphics.Bitmap
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageView
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.whj.music.R
+import com.whj.music.data.CoverArtLoader
 import com.whj.music.databinding.ItemSongBinding
 import com.whj.music.model.BrowseItem
 import com.whj.music.model.BrowseItemType
 import com.whj.music.model.PlayableMedia
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class BrowseAdapter(
     private val onClick: (BrowseItem) -> Unit,
@@ -28,6 +38,8 @@ class BrowseAdapter(
     private var selectedKeys: Set<String> = emptySet()
     private var showDragHandle: Boolean = false
     private var foldersSelectable: Boolean = false
+
+    private val adapterScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     fun setPlaying(mediaId: Long?, folderPath: String) {
         val changed = playingMediaId != mediaId || playingFolderPath != folderPath
@@ -75,6 +87,8 @@ class BrowseAdapter(
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): Holder {
         val binding = ItemSongBinding.inflate(LayoutInflater.from(parent.context), parent, false)
+        binding.coverFrame.clipToOutline = true
+        binding.coverFrame.outlineProvider = android.view.ViewOutlineProvider.BACKGROUND
         return Holder(binding)
     }
 
@@ -82,9 +96,23 @@ class BrowseAdapter(
         holder.bind(getItem(position))
     }
 
+    override fun onViewRecycled(holder: Holder) {
+        holder.cancelCoverLoad()
+        super.onViewRecycled(holder)
+    }
+
     inner class Holder(
         private val binding: ItemSongBinding,
     ) : RecyclerView.ViewHolder(binding.root) {
+        private var coverJob: Job? = null
+        private var boundMediaId: Long = 0L
+
+        fun cancelCoverLoad() {
+            coverJob?.cancel()
+            coverJob = null
+            boundMediaId = 0L
+        }
+
         @SuppressLint("ClickableViewAccessibility")
         fun bind(item: BrowseItem) {
             binding.titleText.text = item.name
@@ -95,7 +123,6 @@ class BrowseAdapter(
             val selectable = item.type == BrowseItemType.FILE ||
                 (item.type == BrowseItemType.FOLDER && foldersSelectable)
 
-            // 多选时不显示“正在播放”高亮，只保留勾选态
             val isPlaying = !selectionMode && when (item.type) {
                 BrowseItemType.FOLDER ->
                     playingFolderPath.isNotEmpty() && item.folderPath == playingFolderPath
@@ -144,17 +171,16 @@ class BrowseAdapter(
 
             when (item.type) {
                 BrowseItemType.FOLDER -> {
-                    binding.iconView.setImageResource(R.drawable.ic_folder)
+                    cancelCoverLoad()
+                    showListIconPlaceholder(isVideo = false, isFolder = true)
                     binding.durationText.text = ctx.getString(
                         R.string.folder_song_count,
                         item.directFileCount,
                     )
                 }
                 BrowseItemType.FILE -> {
-                    binding.iconView.setImageResource(
-                        if (item.isVideo) R.drawable.ic_video else R.drawable.ic_music_note,
-                    )
                     binding.durationText.text = PlayableMedia.formatTime(item.durationMs)
+                    bindFileCover(item)
                 }
             }
 
@@ -182,7 +208,6 @@ class BrowseAdapter(
 
             binding.root.setOnClickListener { onClick(item) }
             binding.root.setOnLongClickListener {
-                // 文件可长按多选；播放列表总览下文件夹（列表项）也可长按
                 val canLong = item.type == BrowseItemType.FILE ||
                     (item.type == BrowseItemType.FOLDER && foldersSelectable)
                 if (canLong) {
@@ -192,6 +217,53 @@ class BrowseAdapter(
                     false
                 }
             }
+        }
+
+        private fun bindFileCover(item: BrowseItem) {
+            val mediaId = item.mediaId
+            boundMediaId = mediaId
+            // 缓存命中：立刻显示
+            val cached = item.uri?.let {
+                CoverArtLoader.peek(mediaId, it, CoverArtLoader.EDGE_THUMB)
+            }
+            if (cached != null) {
+                showListCover(cached)
+                return
+            }
+            showListIconPlaceholder(isVideo = item.isVideo, isFolder = false)
+            coverJob?.cancel()
+            coverJob = adapterScope.launch {
+                val bmp = withContext(Dispatchers.IO) {
+                    CoverArtLoader.loadBrowseItem(
+                        binding.root.context.applicationContext,
+                        item,
+                        CoverArtLoader.EDGE_THUMB,
+                    )
+                }
+                if (boundMediaId != mediaId) return@launch
+                if (bmp != null) {
+                    showListCover(bmp)
+                }
+            }
+        }
+
+        private fun showListCover(bmp: Bitmap) {
+            binding.iconView.setPadding(0, 0, 0, 0)
+            binding.iconView.scaleType = ImageView.ScaleType.FIT_CENTER
+            binding.iconView.setImageBitmap(bmp)
+        }
+
+        private fun showListIconPlaceholder(isVideo: Boolean, isFolder: Boolean) {
+            val pad = (11 * binding.root.resources.displayMetrics.density).toInt()
+            binding.iconView.setPadding(pad, pad, pad, pad)
+            binding.iconView.scaleType = ImageView.ScaleType.FIT_CENTER
+            binding.iconView.setImageResource(
+                when {
+                    isFolder -> R.drawable.ic_folder
+                    isVideo -> R.drawable.ic_video
+                    else -> R.drawable.ic_music_note
+                },
+            )
         }
     }
 

@@ -3,11 +3,12 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:paddingHorizontal="24dp"
-    android:paddingVertical="6dp">
+    android:paddingTop="0dp"
+    android:paddingBottom="0dp">
 
     <com.whj.music.ui.KaraokeLineView
         android:id="@+id/karaokeLine"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:paddingVertical="2dp" />
+        android:paddingVertical="0dp" />
 </FrameLayout>

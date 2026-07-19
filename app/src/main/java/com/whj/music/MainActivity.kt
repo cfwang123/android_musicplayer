@@ -14,6 +14,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ArrayAdapter
 import android.widget.EditText
+import android.widget.ImageView
 import android.widget.PopupMenu
 import android.widget.SeekBar
 import android.widget.Toast
@@ -30,6 +31,7 @@ import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.whj.music.data.AppSettings
+import com.whj.music.data.CoverArtLoader
 import com.whj.music.data.FavoriteStore
 import com.whj.music.data.FolderBrowser
 import com.whj.music.data.FolderPlaybackStore
@@ -56,6 +58,7 @@ import com.whj.music.ui.BrowseAdapter
 import com.whj.music.ui.LyricsAdapter
 import com.whj.music.ui.PlaylistAdapter
 import kotlin.math.abs
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
@@ -120,6 +123,9 @@ class MainActivity : AppCompatActivity() {
     /** 1 屏上次自动定位的曲目，避免进度刷新重复滚动 */
     private var lastLocatedMediaId: Long? = null
     private var lastLocatedFolder: String = ""
+    /** 当前封面对应的 mediaId，避免进度刷新重复加载 */
+    private var coverMediaId: Long? = null
+    private var coverLoadJob: Job? = null
     private var activeToast: Toast? = null
     private var pendingRestore: PlaybackStore.Snapshot? = null
     private var restoreAttempted = false
@@ -177,6 +183,10 @@ class MainActivity : AppCompatActivity() {
                 playerService?.startSleepTimer(mins)
             }
             tryConsumeRestore()
+            if (pendingPlayAfterBind) {
+                pendingPlayAfterBind = false
+                onPlayPauseClick()
+            }
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
@@ -315,39 +325,117 @@ class MainActivity : AppCompatActivity() {
             restoreAttempted = true
             return
         }
+        // 已有会话但未在播（例如仅 prepare 失败）：仍用恢复逻辑重起
         restoreAttempted = true
         pendingRestore = null
-
         lifecycleScope.launch {
-            try {
-                val folder = FolderBrowser.normalizeFolder(snap.media.folderPath)
-                val items = if (folder.isNotEmpty()) {
-                    browser.listPlayableInFolder(folder)
-                } else {
-                    emptyList()
-                }
-                var list = items
-                var index = list.indexOfFirst {
-                    it.id == snap.media.id || it.uri == snap.media.uri
-                }
-                if (index < 0) {
-                    list = listOf(snap.media) + list
-                    index = 0
-                }
-                playableInFolder = list
-                MusicPlayerService.start(this@MainActivity)
-                service.playItem(
-                    list[index],
-                    list,
-                    folder.ifBlank { snap.media.folderPath },
-                    startPositionMs = snap.positionMs,
-                    autoPlay = true,
-                )
-                // 再确保列表定位（服务可能在其它路径已打开列表）
-                loadFolder(folder, scrollToMediaId = list[index].id)
-            } catch (_: Exception) {
-                // 恢复失败忽略
+            startPlaybackFromSnapshot(snap, autoPlay = true, relocateBrowse = true)
+        }
+    }
+
+    /**
+     * 底栏 / 歌词页播放键：无会话时从上次进度起播，有会话时 toggle。
+     */
+    private fun onPlayPauseClick() {
+        MusicPlayerService.start(this)
+        ensureBound()
+        val service = playerService
+        if (service == null) {
+            // 连上后再试
+            pendingPlayAfterBind = true
+            return
+        }
+        if (service.hasActiveSession() && service.hasPreparedOrPreparingPlayer()) {
+            service.togglePlayPause()
+            return
+        }
+        if (service.hasActiveSession()) {
+            // 有列表无播放器：由服务内部 re-play
+            service.togglePlayPause()
+            return
+        }
+        // 无会话：加载上次曲目并播放
+        lifecycleScope.launch {
+            val snap = PlaybackStore.load(this@MainActivity)
+            if (snap == null) {
+                showToast(getString(R.string.no_playing_file))
+                return@launch
             }
+            startPlaybackFromSnapshot(snap, autoPlay = true, relocateBrowse = false)
+        }
+    }
+
+    private var pendingPlayAfterBind = false
+
+    /**
+     * 根据快照构建播放列表并 playItem（支持普通文件夹 / 播放列表 / 收藏）。
+     */
+    private suspend fun startPlaybackFromSnapshot(
+        snap: PlaybackStore.Snapshot,
+        autoPlay: Boolean,
+        relocateBrowse: Boolean,
+    ) {
+        try {
+            val folder = FolderBrowser.normalizeFolder(snap.media.folderPath)
+            val items = resolvePlayableList(folder, snap.media)
+            var list = items
+            var index = list.indexOfFirst {
+                it.id == snap.media.id || it.uri == snap.media.uri
+            }
+            if (index < 0) {
+                list = listOf(snap.media) + list
+                index = 0
+            }
+            playableInFolder = list
+            MusicPlayerService.start(this@MainActivity)
+            ensureBound()
+            val service = playerService
+            if (service == null) {
+                pendingPlay = list[index]
+                pendingFolderResumeMs = snap.positionMs
+                return
+            }
+            service.playItem(
+                list[index],
+                list,
+                folder.ifBlank { snap.media.folderPath },
+                startPositionMs = snap.positionMs,
+                autoPlay = autoPlay,
+            )
+            if (relocateBrowse) {
+                // 已在目标目录则只滚动，避免重复 load 触发其它恢复逻辑
+                if (FolderBrowser.normalizeFolder(currentFolder) == folder) {
+                    scrollBrowseToMedia(list[index].id)
+                } else {
+                    loadFolder(folder, scrollToMediaId = list[index].id)
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("MainActivity", "startPlaybackFromSnapshot failed", e)
+        }
+    }
+
+    /** 按文件夹类型解析可播列表 */
+    private suspend fun resolvePlayableList(
+        folder: String,
+        fallback: PlayableMedia,
+    ): List<PlayableMedia> {
+        return when {
+            PlaylistPaths.isFavorites(folder) -> {
+                browser.resolveMediaIds(
+                    FavoriteStore.mediaIdsOrdered(this),
+                    PlaylistPaths.favoritesPath(),
+                ).mapNotNull { it.toPlayable() }
+            }
+            PlaylistPaths.isUserPlaylist(folder) -> {
+                val id = PlaylistPaths.playlistIdOf(folder) ?: return listOf(fallback)
+                PlaylistStore.get(this, id)?.tracks?.mapNotNull { it.toPlayable() }
+                    .orEmpty()
+            }
+            folder.isNotEmpty() && !PlaylistPaths.isInPlaylistSpace(folder) -> {
+                browser.listPlayableInFolder(folder)
+            }
+            else -> emptyList()
         }
     }
 
@@ -548,6 +636,9 @@ class MainActivity : AppCompatActivity() {
         player.playerSpeedBtn.setOnClickListener { onPlayerSpeedBtnClick(it) }
         player.playerFavoriteBtn.setOnClickListener { onCurrentTrackFavoriteToggle() }
         player.playerAddPlaylistBtn.setOnClickListener { onPlayerAddToPlaylistClick(it) }
+        // 圆角裁剪封面
+        player.coverFrame.clipToOutline = true
+        player.coverFrame.outlineProvider = android.view.ViewOutlineProvider.BACKGROUND
     }
 
     private fun onPlayerAddToPlaylistClick(anchor: View) {
@@ -572,8 +663,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupSharedPlayerBar() {
         bar.barPlayPauseBtn.setOnClickListener {
-            ensureBound()
-            playerService?.togglePlayPause()
+            onPlayPauseClick()
         }
         bar.barPrevBtn.setOnClickListener {
             ensureBound()
@@ -652,11 +742,12 @@ class MainActivity : AppCompatActivity() {
             }
         })
         lyrics.lyricsPlayPauseBtn.setOnClickListener {
-            ensureBound()
-            playerService?.togglePlayPause()
+            onPlayPauseClick()
         }
         lyrics.lyricsLoopBtn.setOnClickListener { cyclePlayMode() }
         lyrics.lyricsPlaylistBtn.setOnClickListener { showPlaylistSheet() }
+        lyrics.lyricsPrevSentenceBtn.setOnClickListener { seekLyricSentence(prev = true) }
+        lyrics.lyricsNextSentenceBtn.setOnClickListener { seekLyricSentence(prev = false) }
         lyrics.lyricsSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 if (!fromUser) return
@@ -1193,18 +1284,37 @@ class MainActivity : AppCompatActivity() {
         ensureBound()
         val state = playerService?.currentState()
         if (useLyricSentenceSeek(state) && state != null) {
-            val media = state.item ?: return
-            val pos = state.positionMs
-            val target = if (prev) {
-                lyricsRepo.prevSentencePositionMs(media, pos)
-            } else {
-                lyricsRepo.nextSentencePositionMs(media, pos)
-            }
-            if (target != null) {
-                playerService?.seekTo(target)
-            }
+            seekLyricSentence(prev)
         } else {
             seekRelative(if (prev) -60_000 else 60_000)
+        }
+    }
+
+    /**
+     * 3 屏专用：上一句 / 下一句（有时间轴歌词即可，不受曲长限制）。
+     */
+    private fun seekLyricSentence(prev: Boolean) {
+        ensureBound()
+        val state = playerService?.currentState() ?: lastState
+        val media = state?.item
+        if (media == null) {
+            showToast(getString(R.string.no_playing_file))
+            return
+        }
+        if (!lyricsRepo.hasTimedLyrics(media)) {
+            showToast(getString(R.string.lyrics_empty))
+            return
+        }
+        val pos = state.positionMs
+        val target = if (prev) {
+            lyricsRepo.prevSentencePositionMs(media, pos)
+        } else {
+            lyricsRepo.nextSentencePositionMs(media, pos)
+        }
+        if (target != null) {
+            playerService?.seekTo(target)
+            // 句跳转后退出手动浏览，回到跟唱
+            endLyricsBrowsing(resumeFollow = true)
         }
     }
 
@@ -1695,6 +1805,9 @@ class MainActivity : AppCompatActivity() {
     private fun maybeResumeFolderPlayback() {
         if (!AppSettings.resumeFolderOnOpen(this)) return
         if (currentFolder.isEmpty()) return
+        // 启动全局恢复尚未完成时，不抢播
+        if (AppSettings.resumeOnStart(this) && !restoreAttempted) return
+        if (pendingRestore != null) return
         val snap = FolderPlaybackStore.load(this, currentFolder) ?: return
         // 列表中定位
         val inList = playableInFolder.firstOrNull {
@@ -1825,6 +1938,41 @@ class MainActivity : AppCompatActivity() {
         updateBrowseIndexText(state)
     }
 
+    /** 2 屏封面：嵌入图 / 专辑图 / 同目录 cover */
+    private fun updateCoverArt(media: PlayableMedia?) {
+        if (!::player.isInitialized) return
+        if (media == null) {
+            coverLoadJob?.cancel()
+            coverMediaId = null
+            showCoverPlaceholder()
+            return
+        }
+        if (coverMediaId == media.id) return
+        coverMediaId = media.id
+        coverLoadJob?.cancel()
+        // 先占位，避免切歌闪旧图
+        showCoverPlaceholder()
+        coverLoadJob = lifecycleScope.launch {
+            val bmp = CoverArtLoader.load(this@MainActivity, media)
+            if (coverMediaId != media.id) return@launch
+            if (bmp != null) {
+                // 按比例缩放居中；透明圆角底（无底色，仍可 clip）
+                player.coverFrame.setBackgroundResource(R.drawable.bg_cover_large_clear)
+                player.coverImage.scaleType = ImageView.ScaleType.FIT_CENTER
+                player.coverImage.setImageBitmap(bmp)
+            } else {
+                showCoverPlaceholder()
+            }
+        }
+    }
+
+    private fun showCoverPlaceholder() {
+        if (!::player.isInitialized) return
+        player.coverFrame.setBackgroundResource(R.drawable.bg_cover_large)
+        player.coverImage.scaleType = ImageView.ScaleType.CENTER
+        player.coverImage.setImageResource(R.drawable.ic_music_note)
+    }
+
     /** 1 屏显示当前曲目序号，如 10/299 */
     private fun updateBrowseIndexText(state: MusicPlayerService.PlaybackState?) {
         if (!::browse.isInitialized) return
@@ -1866,6 +2014,7 @@ class MainActivity : AppCompatActivity() {
             lyrics.lyricsSeekBar.progress = 0
             updatePlayerMiniLyrics(emptyList(), 0f, emptyMessage = true)
             updateFavoriteButtons(null)
+            updateCoverArt(null)
             return
         }
 
@@ -1879,6 +2028,7 @@ class MainActivity : AppCompatActivity() {
         lyrics.lyricsTitle.text = item.title
         lyrics.lyricsArtist.text = item.subtitle
         updateFavoriteButtons(item.id)
+        updateCoverArt(item)
 
         val durationText = PlayableMedia.formatTime(state.durationMs.toLong())
         bar.barDurationText.text = durationText

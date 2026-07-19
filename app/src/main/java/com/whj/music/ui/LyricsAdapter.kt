@@ -5,6 +5,7 @@ import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
 import com.whj.music.databinding.ItemLyricBinding
 import com.whj.music.model.LyricLine
+import kotlin.math.abs
 
 class LyricsAdapter : RecyclerView.Adapter<LyricsAdapter.Holder>() {
 
@@ -28,7 +29,6 @@ class LyricsAdapter : RecyclerView.Adapter<LyricsAdapter.Holder>() {
         when {
             linesChanged -> notifyDataSetChanged()
             indexChanged -> {
-                // 旧当前句与新当前句刷新（去掉/加上蒙版）
                 val from = minOf(
                     if (oldStart < 0) start else oldStart,
                     if (start < 0) oldStart else start,
@@ -39,11 +39,13 @@ class LyricsAdapter : RecyclerView.Adapter<LyricsAdapter.Holder>() {
                 ).coerceAtLeast(from)
                 if (lines.isNotEmpty()) {
                     val count = (to - from + 1).coerceAtLeast(1)
-                    notifyItemRangeChanged(from.coerceIn(0, lines.lastIndex), count.coerceAtMost(lines.size - from))
+                    notifyItemRangeChanged(
+                        from.coerceIn(0, lines.lastIndex),
+                        count.coerceAtMost(lines.size - from),
+                    )
                 }
             }
             start >= 0 && end >= start -> {
-                // 仅进度变化：payload 更新，减少闪烁
                 notifyItemRangeChanged(start, end - start + 1, PAYLOAD_PROGRESS)
             }
         }
@@ -75,7 +77,15 @@ class LyricsAdapter : RecyclerView.Adapter<LyricsAdapter.Holder>() {
 
     private fun bindFull(holder: Holder, position: Int) {
         val current = position in currentStart..currentEnd && currentStart >= 0
-        holder.bind(lines[position].text, if (current) progress else 0f, current)
+        // 同时间戳组（中英文）行间距小；不同句之间 bottom=5dp
+        val nextSameGroup = position < lines.lastIndex &&
+            abs(lines[position].timeSec - lines[position + 1].timeSec) <= SAME_GROUP_T
+        holder.bind(
+            text = lines[position].text,
+            progress = if (current) progress else 0f,
+            emphasize = current,
+            tightWithNext = nextSameGroup,
+        )
     }
 
     override fun getItemCount(): Int = lines.size
@@ -85,11 +95,17 @@ class LyricsAdapter : RecyclerView.Adapter<LyricsAdapter.Holder>() {
     ) : RecyclerView.ViewHolder(binding.root) {
         private var lastText: String = ""
         private var lastEmphasize: Boolean = false
+        private val density = binding.root.resources.displayMetrics.density
+        private val padH = (24 * density).toInt()
+        private val padTight = (1 * density).toInt()
+        private val padSentence = (5 * density).toInt()
 
-        fun bind(text: String, progress: Float, emphasize: Boolean) {
+        fun bind(text: String, progress: Float, emphasize: Boolean, tightWithNext: Boolean) {
             lastText = text
             lastEmphasize = emphasize
             binding.karaokeLine.setLine(text, progress, emphasize)
+            val bottom = if (tightWithNext) padTight else padSentence
+            binding.root.setPadding(padH, padTight, padH, bottom)
         }
 
         fun bindProgress(progress: Float) {
@@ -99,5 +115,7 @@ class LyricsAdapter : RecyclerView.Adapter<LyricsAdapter.Holder>() {
 
     companion object {
         private const val PAYLOAD_PROGRESS = "progress"
+        /** 与 LrcParser.SAME_T 一致：同时间戳中英文归为一句 */
+        private const val SAME_GROUP_T = 0.08
     }
 }

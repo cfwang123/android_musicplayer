@@ -366,22 +366,50 @@ class MusicPlayerService : Service() {
     }
 
     fun togglePlayPause() {
-        val player = mediaPlayer ?: return
+        // 有列表但未 prepare（焦点失败 / 启动恢复中断等）：重新起播当前项
+        val player = mediaPlayer
+        if (player == null) {
+            if (currentIndex in playlist.indices) {
+                val pos = lastKnownPositionMs().coerceAtLeast(0)
+                Log.i(TAG, "togglePlayPause: no player, re-play index=$currentIndex pos=$pos")
+                playAt(currentIndex, startPositionMs = pos, autoPlay = true)
+            } else {
+                Log.w(TAG, "togglePlayPause: no player and empty playlist")
+            }
+            return
+        }
         try {
             if (player.isPlaying) {
                 pausedByTransientFocus = false
                 pauseInternal(updateFocus = true)
             } else {
                 pausedByTransientFocus = false
-                if (!requestAudioFocus()) return
+                if (!requestAudioFocus()) {
+                    Log.w(TAG, "togglePlayPause: audio focus denied")
+                    return
+                }
                 player.start()
                 startProgressUpdates()
                 updateForegroundNotification()
                 notifyState()
             }
         } catch (e: IllegalStateException) {
-            Log.w(TAG, "togglePlayPause failed", e)
+            Log.w(TAG, "togglePlayPause failed, re-play current", e)
+            if (currentIndex in playlist.indices) {
+                playAt(currentIndex, startPositionMs = lastKnownPositionMs(), autoPlay = true)
+            }
         }
+    }
+
+    /** 是否已创建 MediaPlayer（可能已 pause / 正在 prepare） */
+    fun hasPreparedOrPreparingPlayer(): Boolean = mediaPlayer != null
+
+    private fun lastKnownPositionMs(): Int {
+        return try {
+            mediaPlayer?.currentPosition?.coerceAtLeast(0)
+        } catch (_: Exception) {
+            null
+        } ?: PlaybackStore.load(this)?.positionMs?.coerceAtLeast(0) ?: 0
     }
 
     fun stopPlayback() {
@@ -744,10 +772,10 @@ class MusicPlayerService : Service() {
         ensureForeground()
         notifyState()
 
-        if (!requestAudioFocus()) {
-            Log.w(TAG, "audio focus denied")
-            notifyState()
-            return
+        // 焦点失败时仍 prepare，便于用户点播放再抢焦点；不再直接 return 导致「有曲名无播放器」
+        val focusOk = requestAudioFocus()
+        if (!focusOk) {
+            Log.w(TAG, "audio focus denied before prepare, will prepare anyway title=${item.title}")
         }
 
         val player = MediaPlayer()
@@ -770,14 +798,33 @@ class MusicPlayerService : Service() {
                     consecutiveFailures = 0
                     val seek = pendingSeekMs
                     pendingSeekMs = 0
-                    if (seek > 0) {
-                        val dur = mp.duration.takeIf { it > 0 } ?: Int.MAX_VALUE
-                        mp.seekTo(seek.coerceIn(0, dur))
+                    val dur = try {
+                        mp.duration.takeIf { it > 0 } ?: 0
+                    } catch (_: Exception) {
+                        0
+                    }
+                    // 进度接近曲末时从头播，避免一恢复就马上播完、看起来像没播
+                    val seekTo = when {
+                        seek <= 0 -> 0
+                        dur > 0 && seek >= dur - 1500 -> 0
+                        dur > 0 -> seek.coerceIn(0, dur - 1)
+                        else -> seek
+                    }
+                    if (seekTo > 0) {
+                        mp.seekTo(seekTo)
                     }
                     applyPlaybackSpeed()
                     // 绑定均衡器（默认关闭，仅启用时改音色）
                     attachEqualizer(mp.audioSessionId)
                     if (autoPlayOnPrepared) {
+                        if (!hasAudioFocus && !requestAudioFocus()) {
+                            Log.w(TAG, "prepared but no focus, wait for user play: ${item.title}")
+                            stopProgressUpdates()
+                            saveCurrentPlayback()
+                            updateForegroundNotification()
+                            notifyState()
+                            return@setOnPreparedListener
+                        }
                         mp.start()
                         // 再设一次倍速，避免 start 后被重置
                         applyPlaybackSpeed()
@@ -1039,13 +1086,33 @@ class MusicPlayerService : Service() {
 
         if (full || item?.id != lastSessionMetaId) {
             lastSessionMetaId = item?.id
-            val meta = MediaMetadataCompat.Builder()
+            val metaBuilder = MediaMetadataCompat.Builder()
                 .putString(MediaMetadataCompat.METADATA_KEY_TITLE, item?.title ?: getString(R.string.now_playing_none))
                 .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, item?.subtitle.orEmpty())
                 .putString(MediaMetadataCompat.METADATA_KEY_ALBUM, item?.folderPath?.trimEnd('/').orEmpty())
                 .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, duration)
-                .build()
-            session.setMetadata(meta)
+            session.setMetadata(metaBuilder.build())
+            // 异步补封面到锁屏 / 通知
+            if (item != null) {
+                val trackId = item.id
+                serviceScope.launch {
+                    val art = com.whj.music.data.CoverArtLoader.load(this@MusicPlayerService, item)
+                    if (art == null || lastSessionMetaId != trackId) return@launch
+                    val withArt = MediaMetadataCompat.Builder()
+                        .putString(MediaMetadataCompat.METADATA_KEY_TITLE, item.title)
+                        .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, item.subtitle)
+                        .putString(
+                            MediaMetadataCompat.METADATA_KEY_ALBUM,
+                            item.folderPath.trimEnd('/'),
+                        )
+                        .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, duration)
+                        .putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, art)
+                        .putBitmap(MediaMetadataCompat.METADATA_KEY_DISPLAY_ICON, art)
+                        .build()
+                    mediaSession?.setMetadata(withArt)
+                    updateForegroundNotification()
+                }
+            }
         }
 
         val state = when {

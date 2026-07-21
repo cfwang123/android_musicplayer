@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 彩色屏：主题浅色高亮底 -->
+<!-- 墨水屏：比彩屏 #E8F4FC 稍深一点，映射为浅灰底即可 -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="rectangle">
-    <solid android:color="?attr/colorItemPlayingBg" />
+    <solid android:color="#C5D5E4" />
 </shape>

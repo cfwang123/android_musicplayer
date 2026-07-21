@@ -20,12 +20,10 @@
 
 | 项 | 说明 | 
 |----|------|
-| 包名 | `com.whj.music` |
 | 应用名 | 音乐播放器 |
 | 语言 | Kotlin |
 | minSdk | 24（Android 7.0+） |
 | targetSdk / compileSdk | 34 |
-| 版本 | 1.0.1（`versionCode` 2） |
 | 构建 | Gradle 8.4 + AGP 8.3.2 |
 | JDK | 17（可在本机 `gradle.properties` 配置 `org.gradle.java.home`，真实路径勿提交） |
 | 路径 | 目录名含中文时需 `android.overridePathCheck=true`（已配置） |
@@ -144,15 +142,15 @@ node build.js devices
 .\gradlew.bat assembleDebug
 .\gradlew.bat assembleRelease
 .\gradlew.bat installDebug
-adb shell am start -n com.whj.music/.MainActivity
-adb install -r app\build\outputs\apk\release\music1.0.1.apk
+node build.js run
+node build.js apk
 ```
 
-成功后 APK 大致位置：
+成功后 APK 大致位置（文件名带 versionName）：
 
 ```
 app/build/outputs/apk/debug/app-debug.apk
-app/build/outputs/apk/release/music1.0.1.apk
+app/build/outputs/apk/release/music*.apk
 ```
 
 Release 使用 `keystore.properties` + `release.keystore` 签名（与 debug 共用时可覆盖安装保留数据）；密钥文件勿提交仓库，见 `keystore.properties.example`。
@@ -169,9 +167,9 @@ Release 使用 `keystore.properties` + `release.keystore` 签名（与 debug 共
 ### logcat / 卸载
 
 ```powershell
-adb logcat --pid=$(adb shell pidof -s com.whj.music)
-adb logcat | Select-String "whj.music|AndroidRuntime"
-adb uninstall com.whj.music
+# applicationId 见 app/build.gradle.kts
+adb logcat | Select-String "AndroidRuntime"
+adb uninstall <applicationId>
 ```
 
 ## 目录结构

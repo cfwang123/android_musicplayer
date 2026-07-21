@@ -20,12 +20,10 @@ More images: [`screenshots/`](screenshots/).
 
 | Item | Value |
 |------|--------|
-| Package | `com.whj.music` |
 | App name | Music Player |
 | Language | Kotlin |
 | minSdk | 24 (Android 7.0+) |
 | targetSdk / compileSdk | 34 |
-| Version | 1.0.1 (`versionCode` 2) |
 | Build | Gradle 8.4 + AGP 8.3.2 |
 | JDK | 17 (optional `org.gradle.java.home` in local `gradle.properties`; do not commit real paths) |
 | Paths | If the project path has non-ASCII characters, keep `android.overridePathCheck=true` (already set) |
@@ -144,15 +142,15 @@ node build.js devices
 .\gradlew.bat assembleDebug
 .\gradlew.bat assembleRelease
 .\gradlew.bat installDebug
-adb shell am start -n com.whj.music/.MainActivity
-adb install -r app\build\outputs\apk\release\music1.0.1.apk
+node build.js run
+node build.js apk
 ```
 
-Typical APK paths:
+Typical APK paths (release name includes versionName):
 
 ```
 app/build/outputs/apk/debug/app-debug.apk
-app/build/outputs/apk/release/music1.0.1.apk
+app/build/outputs/apk/release/music*.apk
 ```
 
 Release signing uses `keystore.properties` + `release.keystore` (shared with debug when configured so reinstall keeps data). Do not commit secrets; see `keystore.properties.example`.
@@ -169,9 +167,9 @@ Incremental builds usually do not need `clean`.
 ### Logcat / uninstall
 
 ```powershell
-adb logcat --pid=$(adb shell pidof -s com.whj.music)
-adb logcat | Select-String "whj.music|AndroidRuntime"
-adb uninstall com.whj.music
+# applicationId: see app/build.gradle.kts
+adb logcat | Select-String "AndroidRuntime"
+adb uninstall <applicationId>
 ```
 
 ## Project layout

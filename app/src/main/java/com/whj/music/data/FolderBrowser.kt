@@ -80,22 +80,32 @@ class FolderBrowser(private val context: Context) {
      */
     suspend fun listAllMediaFolderPaths(): List<String> = withContext(Dispatchers.IO) {
         val paths = linkedSetOf<String>()
-        collectRelativePaths(audioCollection(), MediaStore.Audio.Media.RELATIVE_PATH, paths)
-        collectRelativePaths(videoCollection(), MediaStore.Video.Media.RELATIVE_PATH, paths)
+        collectRelativePaths(audioCollection(), paths)
+        collectRelativePaths(videoCollection(), paths)
         paths.map { normalizeFolder(it) }.filter { it.isNotEmpty() }.sortedBy { it.lowercase() }
     }
 
-    private fun collectRelativePaths(collection: Uri, relativeColumn: String, out: MutableSet<String>) {
-        val projection = arrayOf(relativeColumn)
-        runCatching {
-            context.contentResolver.query(collection, projection, null, null, null)?.use { cursor ->
-                val col = cursor.getColumnIndex(relativeColumn)
-                if (col < 0) return
-                while (cursor.moveToNext()) {
-                    val rel = cursor.getString(col) ?: continue
-                    val n = normalizeFolder(rel)
-                    if (n.isNotEmpty()) out += n
-                }
+    private fun collectRelativePaths(collection: Uri, out: MutableSet<String>) {
+        // 兼容 API 28- 无 RELATIVE_PATH、部分 OEM 无 _data
+        MediaStoreCompat.query(
+            resolver = context.contentResolver,
+            uri = collection,
+            projectionBuilder = { includeData, includeRelative ->
+                buildList {
+                    if (includeRelative && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        add(MediaStore.MediaColumns.RELATIVE_PATH)
+                    }
+                    if (includeData) add(MediaStore.MediaColumns.DATA)
+                    // 至少要有一列，避免空 projection
+                    if (isEmpty()) add(MediaStore.MediaColumns._ID)
+                }.toTypedArray()
+            },
+        )?.use { cursor ->
+            val relCol = cursor.getColumnIndex(MediaStore.MediaColumns.RELATIVE_PATH)
+            val dataCol = cursor.getColumnIndex(MediaStore.MediaColumns.DATA)
+            while (cursor.moveToNext()) {
+                val n = MediaStoreCompat.readRelativeFolder(cursor, relCol, dataCol)
+                if (n.isNotEmpty()) out += n
             }
         }
     }
@@ -153,35 +163,23 @@ class FolderBrowser(private val context: Context) {
             val placeholders = chunk.joinToString(",") { "?" }
             val selection = MediaStore.MediaColumns._ID + " IN ($placeholders)"
             val args = chunk.map { it.toString() }.toTypedArray()
-            val projection = arrayOf(
-                MediaStore.MediaColumns._ID,
-                MediaStore.MediaColumns.DISPLAY_NAME,
-                MediaStore.MediaColumns.TITLE,
-                MediaStore.MediaColumns.DURATION,
-                MediaStore.MediaColumns.RELATIVE_PATH,
-                MediaStore.MediaColumns.DATA,
-            ) + if (!isVideo) {
-                arrayOf(MediaStore.Audio.Media.ARTIST, MediaStore.Audio.Media.IS_MUSIC)
-            } else {
-                arrayOf(MediaStore.Video.Media.ARTIST)
-            }
             runCatching {
-                context.contentResolver.query(
-                    collection,
-                    projection,
-                    selection,
-                    args,
-                    null,
+                MediaStoreCompat.query(
+                    resolver = context.contentResolver,
+                    uri = collection,
+                    projectionBuilder = { includeData, includeRelative ->
+                        MediaStoreCompat.mediaByIdProjection(isVideo, includeData, includeRelative)
+                    },
+                    selection = selection,
+                    selectionArgs = args,
                 )?.use { cursor ->
                     val idCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID)
-                    val displayCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DISPLAY_NAME)
+                    val displayCol = cursor.getColumnIndex(MediaStore.MediaColumns.DISPLAY_NAME)
                     val titleCol = cursor.getColumnIndex(MediaStore.MediaColumns.TITLE)
                     val durationCol = cursor.getColumnIndex(MediaStore.MediaColumns.DURATION)
                     val pathCol = cursor.getColumnIndex(MediaStore.MediaColumns.RELATIVE_PATH)
                     val dataCol = cursor.getColumnIndex(MediaStore.MediaColumns.DATA)
-                    val artistCol = cursor.getColumnIndex(
-                        if (isVideo) MediaStore.Video.Media.ARTIST else MediaStore.Audio.Media.ARTIST,
-                    )
+                    val artistCol = cursor.getColumnIndex(MediaStore.Audio.Media.ARTIST)
                     val isMusicCol = if (!isVideo) {
                         cursor.getColumnIndex(MediaStore.Audio.Media.IS_MUSIC)
                     } else {
@@ -191,7 +189,7 @@ class FolderBrowser(private val context: Context) {
                         if (isMusicCol >= 0 && cursor.getInt(isMusicCol) == 0) continue
                         val storeId = cursor.getLong(idCol)
                         val mediaId = if (isVideo) storeId or VIDEO_ID_FLAG else storeId
-                        val displayName = cursor.getString(displayCol)
+                        val displayName = if (displayCol >= 0) cursor.getString(displayCol) else null
                         val title = if (titleCol >= 0) cursor.getString(titleCol) else null
                         val name = displayName?.takeIf { it.isNotBlank() }
                             ?: title?.takeIf { it.isNotBlank() }
@@ -202,11 +200,7 @@ class FolderBrowser(private val context: Context) {
                             !artist.isNullOrBlank() && !artist.equals("<unknown>", true) -> artist
                             else -> "音频"
                         }
-                        val relative = if (pathCol >= 0) {
-                            normalizeFolder(cursor.getString(pathCol).orEmpty())
-                        } else {
-                            ""
-                        }
+                        val relative = MediaStoreCompat.readRelativeFolder(cursor, pathCol, dataCol)
                         val data = if (dataCol >= 0) cursor.getString(dataCol) else null
                         val durationMs = if (durationCol >= 0) {
                             cursor.getLong(durationCol).coerceAtLeast(0L)

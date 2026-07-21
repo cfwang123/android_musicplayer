@@ -13,8 +13,8 @@ android {
         applicationId = "com.whj.music"
         minSdk = 24
         targetSdk = 34
-        versionCode = 2
-        versionName = "1.0.1"
+        versionCode = 3
+        versionName = "1.0.2"
     }
 
     // 与 reader / krdict 相同：keystore.properties + release.keystore
@@ -67,10 +67,11 @@ android {
 
     buildFeatures {
         viewBinding = true
+        buildConfig = true
     }
 }
 
-// release 输出：music1.0.1.apk
+// release 输出：music{versionName}.apk
 android.applicationVariants.configureEach {
     val vName = versionName
     val isRelease = buildType.name == "release"

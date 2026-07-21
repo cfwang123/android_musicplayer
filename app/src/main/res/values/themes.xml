@@ -39,8 +39,11 @@
         <item name="colorCoverStart">#D0E8F5</item>
         <item name="colorCoverMid">#B8DCF0</item>
         <item name="colorCoverEnd">#A0D0E8</item>
+        <!-- 当前曲高亮（彩色屏）；墨水屏见 bg_item_playing_mono + 代码分支 -->
         <item name="colorItemPlayingBg">#E8F4FC</item>
         <item name="colorItemPlayingText">#3A7CA8</item>
+        <item name="colorItemPlayingSubtext">#7A8B9A</item>
+        <item name="colorItemPlayingBar">#6BAFD9</item>
         <item name="colorSheetPlaying">#4A90B8</item>
         <item name="colorLyricBg">#FFFFFF</item>
         <item name="colorLyricTitle">#2C3E50</item>
@@ -71,6 +74,8 @@
         <item name="colorCoverEnd">#D0C0A8</item>
         <item name="colorItemPlayingBg">#F5EDE4</item>
         <item name="colorItemPlayingText">#8A6A48</item>
+        <item name="colorItemPlayingSubtext">#9A8070</item>
+        <item name="colorItemPlayingBar">#C4A07A</item>
         <item name="colorSheetPlaying">#A88868</item>
         <item name="colorLyricSung">#A88868</item>
         <item name="colorIconTint">#A88868</item>
@@ -94,6 +99,8 @@
         <item name="colorCoverEnd">#9CD0C8</item>
         <item name="colorItemPlayingBg">#E6F6F4</item>
         <item name="colorItemPlayingText">#3A7A72</item>
+        <item name="colorItemPlayingSubtext">#6A9088</item>
+        <item name="colorItemPlayingBar">#6AB8AE</item>
         <item name="colorSheetPlaying">#4E9A90</item>
         <item name="colorLyricSung">#4E9A90</item>
         <item name="colorIconTint">#4E9A90</item>
@@ -117,6 +124,8 @@
         <item name="colorCoverEnd">#C8C0E0</item>
         <item name="colorItemPlayingBg">#F2F0F8</item>
         <item name="colorItemPlayingText">#6050A0</item>
+        <item name="colorItemPlayingSubtext">#8880A8</item>
+        <item name="colorItemPlayingBar">#A090D0</item>
         <item name="colorSheetPlaying">#8070B0</item>
         <item name="colorLyricSung">#8070B0</item>
         <item name="colorIconTint">#8070B0</item>
@@ -150,6 +159,8 @@
         <item name="colorCoverEnd">#A8C0D4</item>
         <item name="colorItemPlayingBg">#E8EEF5</item>
         <item name="colorItemPlayingText">#3A6A98</item>
+        <item name="colorItemPlayingSubtext">#7A8B9A</item>
+        <item name="colorItemPlayingBar">#7AA8D4</item>
         <item name="colorSheetPlaying">#5A8AB8</item>
         <item name="colorLyricBg">#F5F6F8</item>
         <item name="colorLyricSung">#5A8AB8</item>

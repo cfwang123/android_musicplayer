@@ -28,6 +28,9 @@
     <attr name="colorCoverEnd" format="color" />
     <attr name="colorItemPlayingBg" format="color" />
     <attr name="colorItemPlayingText" format="color" />
+    <!-- 当前曲副标题/时长与左侧竖条（墨水屏高对比） -->
+    <attr name="colorItemPlayingSubtext" format="color" />
+    <attr name="colorItemPlayingBar" format="color" />
     <attr name="colorSheetPlaying" format="color" />
     <attr name="colorLyricBg" format="color" />
     <attr name="colorLyricTitle" format="color" />

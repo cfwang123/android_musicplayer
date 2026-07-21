@@ -58,6 +58,7 @@ import com.whj.music.ui.AppTheme
 import com.whj.music.ui.BrowseAdapter
 import com.whj.music.ui.LyricsAdapter
 import com.whj.music.ui.PlaylistAdapter
+import com.whj.music.ui.ViewPager2GestureFix
 import kotlin.math.abs
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -125,6 +126,8 @@ class MainActivity : AppCompatActivity() {
     /** 1 屏上次自动定位的曲目，避免进度刷新重复滚动 */
     private var lastLocatedMediaId: Long? = null
     private var lastLocatedFolder: String = ""
+    /** 列表点歌触发的切歌：不自动滚动列表（用户已看到该项） */
+    private var suppressNextAutoLocate = false
     /** 当前封面对应的 mediaId，避免进度刷新重复加载 */
     private var coverMediaId: Long? = null
     private var coverLoadJob: Job? = null
@@ -464,6 +467,8 @@ class MainActivity : AppCompatActivity() {
             override fun getItemViewType(position: Int): Int = position
         }
         binding.viewPager.offscreenPageLimit = 2
+        // 列表竖滑时不易误触横滑翻页
+        ViewPager2GestureFix.reduceSwipeSensitivity(binding.viewPager, slopFactor = 4)
         binding.viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
             override fun onPageSelected(position: Int) {
                 // 歌词页自带底部进度，隐藏全局控制条
@@ -503,6 +508,8 @@ class MainActivity : AppCompatActivity() {
         browse.songList.adapter = browseAdapter
         // 切换文件夹时不要列表动画，直接刷新
         browse.songList.itemAnimator = null
+        // 竖滑列表时不要被 ViewPager2 抢走变成翻页
+        ViewPager2GestureFix.preferVerticalScroll(browse.songList)
         setupItemTouchHelper()
         refreshFavoritesUi()
 
@@ -713,6 +720,7 @@ class MainActivity : AppCompatActivity() {
         lyrics.lyricsList.layoutManager = LinearLayoutManager(this)
         lyrics.lyricsList.adapter = lyricsAdapter
         lyrics.lyricsList.itemAnimator = null
+        ViewPager2GestureFix.preferVerticalScroll(lyrics.lyricsList)
         lyrics.lyricsFavoriteBtn.setOnClickListener { onCurrentTrackFavoriteToggle() }
         lyrics.lyricsSeekChip.visibility = View.GONE
         lyrics.lyricsSeekChip.setOnClickListener {
@@ -1059,6 +1067,16 @@ class MainActivity : AppCompatActivity() {
      * 受设置「进入文件夹页时定位当前曲」开关控制；多选中不打断。
      */
     private fun maybeAutoLocateOnTrackChange(state: MusicPlayerService.PlaybackState) {
+        if (suppressNextAutoLocate) {
+            // 列表点歌：只记定位状态，不滚动
+            suppressNextAutoLocate = false
+            val mediaId = state.item?.id
+            if (mediaId != null) {
+                lastLocatedMediaId = mediaId
+                lastLocatedFolder = FolderBrowser.normalizeFolder(state.folderPath)
+            }
+            return
+        }
         if (!AppSettings.autoLocateOnBrowse(this)) return
         if (selectionMode) return
         if (!::binding.isInitialized) return
@@ -1364,6 +1382,8 @@ class MainActivity : AppCompatActivity() {
                 val playable = item.toPlayable() ?: return
                 playableInFolder = currentItems.mapNotNull { it.toPlayable() }
                 if (playableInFolder.isEmpty()) playableInFolder = listOf(playable)
+                // 点列表项切歌：保持当前滚动位置，不要 auto-locate 跳变
+                suppressNextAutoLocate = true
                 playMedia(playable)
                 // 1 屏选歌后停留在列表，不跳转到播放页
             }

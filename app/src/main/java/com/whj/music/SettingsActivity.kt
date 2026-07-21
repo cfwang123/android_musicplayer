@@ -23,11 +23,14 @@ import com.whj.music.databinding.ActivitySettingsBinding
 import com.whj.music.model.PlayMode
 import com.whj.music.ui.AppTheme
 import com.whj.music.ui.AppThemeSkin
+import com.whj.music.util.AppUpdate
 import com.whj.music.util.LocaleHelper
 import com.whj.music.util.StoragePathUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
 
 class SettingsActivity : AppCompatActivity() {
     private lateinit var binding: ActivitySettingsBinding
@@ -45,11 +48,29 @@ class SettingsActivity : AppCompatActivity() {
     private var initialThemeKey: String = "blue"
     private var initialLanguageKey: String = LocaleHelper.SYSTEM
 
+    /** 从「未知应用安装」设置返回后继续安装 */
+    private var pendingInstallApk: File? = null
+    private var downloadCancel: AtomicBoolean? = null
+    private var checkingUpdate = false
+    private var downloadingUpdate = false
+
     private val openTreeLauncher = registerForActivityResult(
         ActivityResultContracts.OpenDocumentTree(),
     ) { uri: Uri? ->
         if (uri == null) return@registerForActivityResult
         handlePickedTree(uri)
+    }
+
+    private val installPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) {
+        val file = pendingInstallApk
+        pendingInstallApk = null
+        if (file != null && file.isFile && AppUpdate.canInstallPackages(this)) {
+            tryInstallApk(file)
+        } else if (file != null) {
+            Toast.makeText(this, R.string.update_install_permission, Toast.LENGTH_LONG).show()
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -129,6 +150,11 @@ class SettingsActivity : AppCompatActivity() {
 
         binding.btnAddRoot.setOnClickListener { openSystemFolderPicker() }
         binding.btnBatteryOpt.setOnClickListener { openBatteryOptimizationSettings() }
+        binding.tvAppVersion.text = getString(
+            R.string.settings_app_version,
+            AppUpdate.currentVersionName(),
+        )
+        binding.btnCheckUpdate.setOnClickListener { onCheckUpdateClick() }
         refreshRootFoldersUi()
         refreshBatteryOptUi()
     }
@@ -136,6 +162,154 @@ class SettingsActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         refreshBatteryOptUi()
+    }
+
+    override fun onDestroy() {
+        downloadCancel?.set(true)
+        super.onDestroy()
+    }
+
+    private fun onCheckUpdateClick() {
+        if (checkingUpdate || downloadingUpdate) return
+        checkingUpdate = true
+        binding.btnCheckUpdate.isEnabled = false
+        Toast.makeText(this, R.string.update_checking, Toast.LENGTH_SHORT).show()
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                AppUpdate.checkLatest()
+            }
+            checkingUpdate = false
+            binding.btnCheckUpdate.isEnabled = true
+            if (isFinishing) return@launch
+            when (result) {
+                is AppUpdate.CheckResult.UpdateAvailable -> showUpdateDialog(result.info)
+                is AppUpdate.CheckResult.UpToDate -> {
+                    Toast.makeText(
+                        this@SettingsActivity,
+                        getString(R.string.update_up_to_date, result.current),
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                }
+                is AppUpdate.CheckResult.Error -> {
+                    Toast.makeText(
+                        this@SettingsActivity,
+                        getString(R.string.update_check_failed, result.message),
+                        Toast.LENGTH_LONG,
+                    ).show()
+                }
+            }
+        }
+    }
+
+    private fun showUpdateDialog(info: AppUpdate.ReleaseInfo) {
+        val body = info.body.trim().ifBlank { "—" }
+        val msg = getString(
+            R.string.update_available_msg,
+            AppUpdate.currentVersionName(),
+            info.versionName,
+            body.take(800),
+        )
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.update_available_title, info.versionName))
+            .setMessage(msg)
+            .setPositiveButton(R.string.update_download) { _, _ ->
+                startDownloadAndInstall(info)
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    private fun startDownloadAndInstall(info: AppUpdate.ReleaseInfo) {
+        if (downloadingUpdate) return
+        downloadingUpdate = true
+        binding.btnCheckUpdate.isEnabled = false
+        val cancel = AtomicBoolean(false)
+        downloadCancel = cancel
+        val progressDialog = AlertDialog.Builder(this)
+            .setTitle(R.string.settings_check_update)
+            .setMessage(getString(R.string.update_downloading, 0))
+            .setNegativeButton(R.string.cancel) { _, _ -> cancel.set(true) }
+            .setCancelable(false)
+            .create()
+        progressDialog.show()
+
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                AppUpdate.downloadApk(
+                    info = info,
+                    destDir = AppUpdate.updateCacheDir(this@SettingsActivity),
+                    cancel = cancel,
+                    onProgress = { pct ->
+                        runOnUiThread {
+                            if (progressDialog.isShowing) {
+                                progressDialog.setMessage(
+                                    getString(R.string.update_downloading, pct),
+                                )
+                            }
+                        }
+                    },
+                )
+            }
+            downloadingUpdate = false
+            downloadCancel = null
+            binding.btnCheckUpdate.isEnabled = true
+            if (progressDialog.isShowing) progressDialog.dismiss()
+            if (isFinishing) return@launch
+            result.fold(
+                onSuccess = { file -> ensureInstallPermissionThenInstall(file) },
+                onFailure = { e ->
+                    if (e is InterruptedException || cancel.get()) {
+                        Toast.makeText(
+                            this@SettingsActivity,
+                            R.string.update_cancelled,
+                            Toast.LENGTH_SHORT,
+                        ).show()
+                    } else {
+                        Toast.makeText(
+                            this@SettingsActivity,
+                            getString(
+                                R.string.update_download_failed,
+                                e.message ?: e.javaClass.simpleName,
+                            ),
+                            Toast.LENGTH_LONG,
+                        ).show()
+                    }
+                },
+            )
+        }
+    }
+
+    private fun ensureInstallPermissionThenInstall(apkFile: File) {
+        if (AppUpdate.canInstallPackages(this)) {
+            tryInstallApk(apkFile)
+            return
+        }
+        pendingInstallApk = apkFile
+        AlertDialog.Builder(this)
+            .setMessage(R.string.update_install_permission)
+            .setPositiveButton(R.string.update_install_permission_btn) { _, _ ->
+                installPermissionLauncher.launch(
+                    AppUpdate.installPermissionSettingsIntent(this),
+                )
+            }
+            .setNegativeButton(R.string.cancel) { _, _ ->
+                pendingInstallApk = null
+            }
+            .setOnCancelListener { pendingInstallApk = null }
+            .show()
+    }
+
+    private fun tryInstallApk(apkFile: File) {
+        try {
+            Toast.makeText(this, R.string.update_installing, Toast.LENGTH_SHORT).show()
+            AppUpdate.installApk(this, apkFile)
+        } catch (e: Exception) {
+            Toast.makeText(
+                this,
+                getString(R.string.update_download_failed, e.message ?: e.javaClass.simpleName),
+                Toast.LENGTH_LONG,
+            ).show()
+        }
     }
 
     override fun onPause() {

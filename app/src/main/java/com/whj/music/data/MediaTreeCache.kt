@@ -329,38 +329,26 @@ object MediaTreeCache {
         childFolderNames: MutableMap<String, MutableSet<String>>,
     ) {
         val collection = audioCollection()
-        val projection = arrayOf(
-            MediaStore.Audio.Media._ID,
-            MediaStore.Audio.Media.DISPLAY_NAME,
-            MediaStore.Audio.Media.TITLE,
-            MediaStore.Audio.Media.ARTIST,
-            MediaStore.Audio.Media.DURATION,
-            MediaStore.Audio.Media.RELATIVE_PATH,
-            MediaStore.Audio.Media.IS_MUSIC,
-            MediaStore.Audio.Media.DATA,
-        )
-        ctx.contentResolver.query(
-            collection,
-            projection,
-            null,
-            null,
-            null,
+        MediaStoreCompat.query(
+            resolver = ctx.contentResolver,
+            uri = collection,
+            projectionBuilder = MediaStoreCompat::audioProjection,
         )?.use { cursor ->
             val idCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
-            val displayCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
-            val titleCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
-            val artistCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
-            val durationCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
-            val pathCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.RELATIVE_PATH)
+            val displayCol = cursor.getColumnIndex(MediaStore.Audio.Media.DISPLAY_NAME)
+            val titleCol = cursor.getColumnIndex(MediaStore.Audio.Media.TITLE)
+            val artistCol = cursor.getColumnIndex(MediaStore.Audio.Media.ARTIST)
+            val durationCol = cursor.getColumnIndex(MediaStore.Audio.Media.DURATION)
+            val pathCol = cursor.getColumnIndex(MediaStore.Audio.Media.RELATIVE_PATH)
             val isMusicCol = cursor.getColumnIndex(MediaStore.Audio.Media.IS_MUSIC)
             val dataCol = cursor.getColumnIndex(MediaStore.Audio.Media.DATA)
 
             while (cursor.moveToNext()) {
                 if (isMusicCol >= 0 && cursor.getInt(isMusicCol) == 0) continue
-                val relative = FolderBrowser.normalizeFolder(cursor.getString(pathCol).orEmpty())
-                val displayName = cursor.getString(displayCol)
-                val title = cursor.getString(titleCol)
-                val artist = cursor.getString(artistCol)
+                val relative = MediaStoreCompat.readRelativeFolder(cursor, pathCol, dataCol)
+                val displayName = if (displayCol >= 0) cursor.getString(displayCol) else null
+                val title = if (titleCol >= 0) cursor.getString(titleCol) else null
+                val artist = if (artistCol >= 0) cursor.getString(artistCol) else null
                 val name = displayName?.takeIf { it.isNotBlank() }
                     ?: title?.takeIf { it.isNotBlank() }
                     ?: "未命名"
@@ -370,6 +358,11 @@ object MediaTreeCache {
                 }
                 val storeId = cursor.getLong(idCol)
                 val data = if (dataCol >= 0) cursor.getString(dataCol) else null
+                val durationMs = if (durationCol >= 0) {
+                    cursor.getLong(durationCol).coerceAtLeast(0L)
+                } else {
+                    0L
+                }
                 addFile(
                     filesByFolder = filesByFolder,
                     directFileCounts = directFileCounts,
@@ -380,7 +373,7 @@ object MediaTreeCache {
                         storeId = storeId,
                         name = name,
                         subtitle = subtitle,
-                        durationMs = cursor.getLong(durationCol).coerceAtLeast(0L),
+                        durationMs = durationMs,
                         isVideo = false,
                         folderPath = relative,
                         filePath = resolveFilePath(data, relative, displayName),
@@ -397,37 +390,32 @@ object MediaTreeCache {
         childFolderNames: MutableMap<String, MutableSet<String>>,
     ) {
         val collection = videoCollection()
-        val projection = arrayOf(
-            MediaStore.Video.Media._ID,
-            MediaStore.Video.Media.DISPLAY_NAME,
-            MediaStore.Video.Media.TITLE,
-            MediaStore.Video.Media.DURATION,
-            MediaStore.Video.Media.RELATIVE_PATH,
-            MediaStore.Video.Media.DATA,
-        )
-        ctx.contentResolver.query(
-            collection,
-            projection,
-            null,
-            null,
-            null,
+        MediaStoreCompat.query(
+            resolver = ctx.contentResolver,
+            uri = collection,
+            projectionBuilder = MediaStoreCompat::videoProjection,
         )?.use { cursor ->
             val idCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media._ID)
-            val displayCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DISPLAY_NAME)
-            val titleCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.TITLE)
-            val durationCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DURATION)
-            val pathCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.RELATIVE_PATH)
+            val displayCol = cursor.getColumnIndex(MediaStore.Video.Media.DISPLAY_NAME)
+            val titleCol = cursor.getColumnIndex(MediaStore.Video.Media.TITLE)
+            val durationCol = cursor.getColumnIndex(MediaStore.Video.Media.DURATION)
+            val pathCol = cursor.getColumnIndex(MediaStore.Video.Media.RELATIVE_PATH)
             val dataCol = cursor.getColumnIndex(MediaStore.Video.Media.DATA)
 
             while (cursor.moveToNext()) {
-                val relative = FolderBrowser.normalizeFolder(cursor.getString(pathCol).orEmpty())
-                val displayName = cursor.getString(displayCol)
-                val title = cursor.getString(titleCol)
+                val relative = MediaStoreCompat.readRelativeFolder(cursor, pathCol, dataCol)
+                val displayName = if (displayCol >= 0) cursor.getString(displayCol) else null
+                val title = if (titleCol >= 0) cursor.getString(titleCol) else null
                 val name = displayName?.takeIf { it.isNotBlank() }
                     ?: title?.takeIf { it.isNotBlank() }
                     ?: "未命名"
                 val storeId = cursor.getLong(idCol)
                 val data = if (dataCol >= 0) cursor.getString(dataCol) else null
+                val durationMs = if (durationCol >= 0) {
+                    cursor.getLong(durationCol).coerceAtLeast(0L)
+                } else {
+                    0L
+                }
                 addFile(
                     filesByFolder = filesByFolder,
                     directFileCounts = directFileCounts,
@@ -438,7 +426,7 @@ object MediaTreeCache {
                         storeId = storeId,
                         name = name,
                         subtitle = "视频 · 仅声音",
-                        durationMs = cursor.getLong(durationCol).coerceAtLeast(0L),
+                        durationMs = durationMs,
                         isVideo = true,
                         folderPath = relative,
                         filePath = resolveFilePath(data, relative, displayName),

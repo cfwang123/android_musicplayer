@@ -250,6 +250,27 @@
                     android:text="@string/settings_battery_opt_open"
                     android:textColor="?attr/colorPrimary" />
             </LinearLayout>
+
+            <TextView
+                style="@style/SettingsSection"
+                android:layout_marginTop="16dp"
+                android:text="@string/settings_section_about" />
+
+            <TextView
+                android:id="@+id/tvAppVersion"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
+                android:textColor="?attr/colorTextSecondary"
+                android:textSize="13sp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnCheckUpdate"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
+                android:text="@string/settings_check_update" />
         </LinearLayout>
     </ScrollView>
 </LinearLayout>

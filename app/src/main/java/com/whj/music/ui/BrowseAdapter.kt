@@ -16,6 +16,7 @@ import com.whj.music.databinding.ItemSongBinding
 import com.whj.music.model.BrowseItem
 import com.whj.music.model.BrowseItemType
 import com.whj.music.model.PlayableMedia
+import com.whj.music.util.DisplayCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -116,7 +117,6 @@ class BrowseAdapter(
         @SuppressLint("ClickableViewAccessibility")
         fun bind(item: BrowseItem) {
             binding.titleText.text = item.name
-            binding.artistText.text = item.subtitle
             val ctx = binding.root.context
             val key = selectionKeyOf(item)
             val selected = selectionMode && selectedKeys.contains(key)
@@ -130,27 +130,38 @@ class BrowseAdapter(
                     playingMediaId != null && item.mediaId == playingMediaId
             }
 
-            // 正在播放：仅用背景/文字高亮，不再显示左侧竖条
+            // 彩色屏：淡色主题高亮；墨水屏：较深蓝灰底（能看出灰色即可）+ 深色字
+            val mono = DisplayCompat.isNonColorScreen(ctx)
+            val monoPlaying = isPlaying && mono
+            // 墨水屏不再用反色竖条，靠灰底区分即可
             binding.playingBar.visibility = View.GONE
             binding.itemRoot.setBackgroundResource(
                 when {
                     selected -> R.drawable.bg_item_selected
+                    monoPlaying -> R.drawable.bg_item_playing_mono
                     isPlaying -> R.drawable.bg_item_playing
                     else -> R.drawable.bg_song_item
                 },
             )
-            binding.titleText.setTextColor(
-                AppTheme.resolveColor(
-                    ctx,
-                    if (isPlaying) R.attr.colorItemPlayingText else R.attr.colorTextPrimary,
-                ),
-            )
-            binding.artistText.setTextColor(
-                AppTheme.resolveColor(ctx, R.attr.colorTextSecondary),
-            )
-            binding.durationText.setTextColor(
-                AppTheme.resolveColor(ctx, R.attr.colorTextMuted),
-            )
+            val titleColor = when {
+                monoPlaying -> 0xFF1A1A1A.toInt()
+                isPlaying -> AppTheme.resolveColor(ctx, R.attr.colorItemPlayingText)
+                else -> AppTheme.resolveColor(ctx, R.attr.colorTextPrimary)
+            }
+            val subColor = when {
+                monoPlaying -> 0xFF2A2A2A.toInt()
+                isPlaying -> AppTheme.resolveColor(ctx, R.attr.colorItemPlayingSubtext)
+                else -> AppTheme.resolveColor(ctx, R.attr.colorTextSecondary)
+            }
+            val mutedColor = when {
+                monoPlaying -> 0xFF333333.toInt()
+                isPlaying -> AppTheme.resolveColor(ctx, R.attr.colorItemPlayingSubtext)
+                else -> AppTheme.resolveColor(ctx, R.attr.colorTextMuted)
+            }
+            binding.titleText.setTextColor(titleColor)
+            binding.titleText.paint.isFakeBoldText = monoPlaying
+            binding.artistText.setTextColor(subColor)
+            binding.durationText.setTextColor(mutedColor)
 
             val favorited = when (item.type) {
                 BrowseItemType.FILE ->
@@ -165,6 +176,7 @@ class BrowseAdapter(
                 binding.favoriteIcon.setImageResource(
                     if (favorited) R.drawable.ic_favorite else R.drawable.ic_favorite_border,
                 )
+                binding.favoriteIcon.clearColorFilter()
                 binding.favoriteIcon.setOnClickListener {
                     onFavoriteClick(item)
                 }
@@ -174,13 +186,31 @@ class BrowseAdapter(
                 BrowseItemType.FOLDER -> {
                     cancelCoverLoad()
                     showListIconPlaceholder(isVideo = false, isFolder = true)
-                    binding.durationText.text = ctx.getString(
-                        R.string.folder_song_count,
-                        item.directFileCount,
-                    )
+                    // 文件夹右侧不再显示「xx 首」
+                    binding.durationText.visibility = View.GONE
+                    binding.durationText.text = ""
+                    // 第二行：n 项等有信息时保留
+                    val sub = item.subtitle.trim()
+                    if (sub.isEmpty()) {
+                        binding.artistText.visibility = View.GONE
+                        binding.artistText.text = ""
+                    } else {
+                        binding.artistText.visibility = View.VISIBLE
+                        binding.artistText.text = sub
+                    }
                 }
                 BrowseItemType.FILE -> {
+                    binding.durationText.visibility = View.VISIBLE
                     binding.durationText.text = PlayableMedia.formatTime(item.durationMs)
+                    // 第二行仅为占位「音频」时不显示
+                    val sub = item.subtitle.trim()
+                    if (sub.isEmpty() || isGenericAudioSubtitle(sub)) {
+                        binding.artistText.visibility = View.GONE
+                        binding.artistText.text = ""
+                    } else {
+                        binding.artistText.visibility = View.VISIBLE
+                        binding.artistText.text = sub
+                    }
                     bindFileCover(item)
                 }
             }
@@ -279,6 +309,14 @@ class BrowseAdapter(
 
         override fun areContentsTheSame(oldItem: BrowseItem, newItem: BrowseItem): Boolean {
             return oldItem == newItem
+        }
+    }
+
+    companion object {
+        /** 无艺人名时的占位副标题，列表第二行不展示 */
+        private fun isGenericAudioSubtitle(subtitle: String): Boolean {
+            return subtitle.equals("音频", ignoreCase = true) ||
+                subtitle.equals("Audio", ignoreCase = true)
         }
     }
 }

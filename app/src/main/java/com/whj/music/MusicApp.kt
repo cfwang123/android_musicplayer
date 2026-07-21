@@ -4,13 +4,21 @@ import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.os.Build
+import com.whj.music.util.IdleAutoCloser
 import com.whj.music.util.LocaleHelper
 
 class MusicApp : Application() {
+    lateinit var idleAutoCloser: IdleAutoCloser
+        private set
+
     override fun onCreate() {
         super.onCreate()
         LocaleHelper.applyFromSettings(this)
         createNotificationChannel()
+        idleAutoCloser = IdleAutoCloser(this).also {
+            IdleAutoCloser.attach(it)
+            it.start()
+        }
     }
 
     private fun createNotificationChannel() {

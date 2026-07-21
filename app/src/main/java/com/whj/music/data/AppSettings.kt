@@ -21,6 +21,8 @@ object AppSettings {
     private const val KEY_EQ_BANDS = "set_eq_bands"
     /** system / zh / en */
     private const val KEY_LANGUAGE = "set_language"
+    /** UI 无活动自动关闭（分钟），0=不关闭，默认 120（2 小时） */
+    private const val KEY_AUTO_CLOSE_MIN = "set_auto_close_min"
 
     fun autoLocateOnBrowse(context: Context): Boolean =
         prefs(context).getBoolean(KEY_AUTO_LOCATE, true)
@@ -154,6 +156,18 @@ object AppSettings {
 
     fun setLanguageKey(context: Context, key: String) {
         prefs(context).edit().putString(KEY_LANGUAGE, key).apply()
+    }
+
+    /**
+     * UI 无活动自动关闭时间（分钟）。
+     * 默认 120（2 小时）；0 表示不自动关闭。
+     * 后台 / 锁屏播放时继续计时；OnResume、触摸、屏幕常亮算有活动并重置。
+     */
+    fun autoCloseMinutes(context: Context): Int =
+        prefs(context).getInt(KEY_AUTO_CLOSE_MIN, 120).coerceIn(0, 24 * 60)
+
+    fun setAutoCloseMinutes(context: Context, minutes: Int) {
+        prefs(context).edit().putInt(KEY_AUTO_CLOSE_MIN, minutes.coerceIn(0, 24 * 60)).apply()
     }
 
     private fun prefs(context: Context) =

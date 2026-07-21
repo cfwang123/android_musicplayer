@@ -7,7 +7,9 @@ import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
 import android.view.LayoutInflater
+import android.view.MotionEvent
 import android.view.View
+import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -24,6 +26,7 @@ import com.whj.music.model.PlayMode
 import com.whj.music.ui.AppTheme
 import com.whj.music.ui.AppThemeSkin
 import com.whj.music.util.AppUpdate
+import com.whj.music.util.IdleAutoCloser
 import com.whj.music.util.LocaleHelper
 import com.whj.music.util.StoragePathUtils
 import kotlinx.coroutines.Dispatchers
@@ -43,6 +46,8 @@ class SettingsActivity : AppCompatActivity() {
         PlayMode.SHUFFLE,
     )
     private val lyricSeekMinutes = (5..30 step 5).toList()
+    /** 自动关闭：分钟；0=不关闭；默认 120 */
+    private val autoCloseMinutesOptions = listOf(0, 30, 60, 120, 180, 240, 360, 480, 720)
     private val skins = AppThemeSkin.entries.toTypedArray()
     private val languageKeys = arrayOf(LocaleHelper.SYSTEM, LocaleHelper.ZH, LocaleHelper.EN)
     private var initialThemeKey: String = "blue"
@@ -92,6 +97,28 @@ class SettingsActivity : AppCompatActivity() {
         binding.spinnerTheme.setSelection(
             skins.indexOfFirst { it.key == initialThemeKey }.coerceAtLeast(0),
         )
+        // 主题：选中后立即保存并 recreate 本页（不关设置、不回到播放页抢播）
+        var themeSpinnerReady = false
+        binding.spinnerTheme.post { themeSpinnerReady = true }
+        binding.spinnerTheme.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(
+                parent: AdapterView<*>?,
+                view: View?,
+                position: Int,
+                id: Long,
+            ) {
+                if (!themeSpinnerReady) return
+                val skin = skins.getOrElse(position) { AppThemeSkin.BLUE }
+                if (skin.key == AppSettings.themeKey(this@SettingsActivity)) return
+                AppSettings.setThemeKey(this@SettingsActivity, skin.key)
+                initialThemeKey = skin.key
+                // 返回主界面时按新主题重建，且不自动恢复播放
+                MainActivity.skipAutoResumeAfterSettings = true
+                recreate()
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
 
         val languageLabels = arrayOf(
             getString(R.string.language_system),
@@ -148,6 +175,24 @@ class SettingsActivity : AppCompatActivity() {
         binding.switchResume.isChecked = AppSettings.resumeOnStart(this)
         binding.switchResumeFolder.isChecked = AppSettings.resumeFolderOnOpen(this)
 
+        val autoCloseLabels = autoCloseMinutesOptions.map { minutes ->
+            when {
+                minutes <= 0 -> getString(R.string.settings_auto_close_never)
+                minutes == 30 -> getString(R.string.settings_auto_close_half_hour)
+                minutes % 60 == 0 -> getString(R.string.settings_auto_close_hours, minutes / 60)
+                else -> getString(R.string.settings_minutes_unit, minutes)
+            }
+        }
+        binding.spinnerAutoClose.adapter = ArrayAdapter(
+            this,
+            android.R.layout.simple_spinner_dropdown_item,
+            autoCloseLabels,
+        )
+        val curAutoClose = AppSettings.autoCloseMinutes(this)
+        val autoCloseIdx = autoCloseMinutesOptions.indexOf(curAutoClose).takeIf { it >= 0 }
+            ?: autoCloseMinutesOptions.indexOf(120).coerceAtLeast(0)
+        binding.spinnerAutoClose.setSelection(autoCloseIdx)
+
         binding.btnAddRoot.setOnClickListener { openSystemFolderPicker() }
         binding.btnBatteryOpt.setOnClickListener { openBatteryOptimizationSettings() }
         binding.tvAppVersion.text = getString(
@@ -155,13 +200,62 @@ class SettingsActivity : AppCompatActivity() {
             AppUpdate.currentVersionName(),
         )
         binding.btnCheckUpdate.setOnClickListener { onCheckUpdateClick() }
+        binding.btnLicense.setOnClickListener { showLicenseDialog() }
         refreshRootFoldersUi()
         refreshBatteryOptUi()
+    }
+
+    private fun showLicenseDialog() {
+        val text = runCatching {
+            assets.open("LICENSE").bufferedReader(Charsets.UTF_8).use { it.readText() }
+        }.getOrNull()?.takeIf { it.isNotBlank() }
+            ?: getString(R.string.settings_license_load_fail)
+        val pad = (20 * resources.displayMetrics.density).toInt()
+        val maxH = (resources.displayMetrics.heightPixels * 0.65f).toInt()
+        val scroll = android.widget.ScrollView(this).apply {
+            setPadding(pad, pad / 2, pad, pad / 2)
+        }
+        val tv = TextView(this).apply {
+            this.text = text
+            textSize = 12f
+            setTextIsSelectable(true)
+            setTextColor(
+                AppTheme.resolveColor(this@SettingsActivity, R.attr.colorTextPrimary, 0xFF2C3E50.toInt()),
+            )
+            typeface = android.graphics.Typeface.MONOSPACE
+        }
+        scroll.addView(
+            tv,
+            android.widget.FrameLayout.LayoutParams(
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
+            ),
+        )
+        scroll.layoutParams = android.widget.FrameLayout.LayoutParams(
+            android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+            maxH,
+        )
+        AlertDialog.Builder(this)
+            .setTitle(R.string.settings_license_title)
+            .setView(scroll)
+            .setPositiveButton(android.R.string.ok, null)
+            .show()
     }
 
     override fun onResume() {
         super.onResume()
         refreshBatteryOptUi()
+        IdleAutoCloser.notifyUiActivity(this)
+    }
+
+    override fun dispatchTouchEvent(ev: MotionEvent?): Boolean {
+        if (ev != null &&
+            (ev.actionMasked == MotionEvent.ACTION_DOWN ||
+                ev.actionMasked == MotionEvent.ACTION_UP)
+        ) {
+            IdleAutoCloser.notifyUiActivity(this)
+        }
+        return super.dispatchTouchEvent(ev)
     }
 
     override fun onDestroy() {
@@ -500,9 +594,17 @@ class SettingsActivity : AppCompatActivity() {
         AppSettings.setResumeOnStart(this, binding.switchResume.isChecked)
         AppSettings.setResumeFolderOnOpen(this, binding.switchResumeFolder.isChecked)
 
+        val autoCloseMin = autoCloseMinutesOptions.getOrElse(
+            binding.spinnerAutoClose.selectedItemPosition,
+        ) { 120 }
+        AppSettings.setAutoCloseMinutes(this, autoCloseMin)
+        // 修改参数后重置空闲计时，避免立刻触发旧阈值
+        IdleAutoCloser.notifyUiActivity(this)
+
+        // 主题已在 Spinner 选中时立即应用；此处再写一次以防只 onPause 保存
         val skin = skins.getOrElse(binding.spinnerTheme.selectedItemPosition) { AppThemeSkin.BLUE }
-        val themeChanged = skin.key != initialThemeKey
         AppSettings.setThemeKey(this, skin.key)
+        initialThemeKey = skin.key
 
         val lang = languageKeys.getOrElse(binding.spinnerLanguage.selectedItemPosition) { LocaleHelper.SYSTEM }
         val langChanged = lang != initialLanguageKey
@@ -510,13 +612,8 @@ class SettingsActivity : AppCompatActivity() {
         if (langChanged) {
             initialLanguageKey = lang
             LocaleHelper.apply(lang)
-        }
-
-        if (themeChanged) {
-            initialThemeKey = skin.key
-            recreate()
-        } else if (langChanged) {
-            // 语言变更由 AppCompat 重建界面
+            // 语言变更重建设置页；返回主界面时也不要自动开播
+            MainActivity.skipAutoResumeAfterSettings = true
             recreate()
         }
     }

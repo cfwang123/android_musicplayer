@@ -182,6 +182,18 @@ class MusicPlayerService : Service() {
             ACTION_NEXT -> playNext()
             ACTION_PREV -> playPrevious()
             ACTION_STOP -> stopSelfAndRelease()
+            ACTION_AUTO_CLOSE -> {
+                // 空闲超时：保存进度、停播并结束服务（勿 START_STICKY，避免被系统拉起）
+                try {
+                    saveCurrentPlayback()
+                } catch (_: Exception) {
+                    // ignore
+                }
+                sleepDeadlineElapsed = 0L
+                pausedByTransientFocus = false
+                stopSelfAndRelease()
+                return START_NOT_STICKY
+            }
         }
         return START_STICKY
     }
@@ -1252,6 +1264,8 @@ class MusicPlayerService : Service() {
         const val ACTION_NEXT = "com.whj.music.action.NEXT"
         const val ACTION_PREV = "com.whj.music.action.PREV"
         const val ACTION_STOP = "com.whj.music.action.STOP"
+        /** 空闲自动关闭：保存进度后释放并 stopSelf */
+        const val ACTION_AUTO_CLOSE = "com.whj.music.action.AUTO_CLOSE"
         private const val NOTIFICATION_ID = 1001
         /** 歌词页跟唱 */
         private const val INTERVAL_LYRICS_MS = 40L

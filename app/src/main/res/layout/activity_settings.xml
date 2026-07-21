@@ -228,6 +228,26 @@
                 android:layout_marginTop="16dp"
                 android:text="@string/settings_section_power" />
 
+            <LinearLayout style="@style/SettingsRow">
+                <TextView
+                    style="@style/SettingsLabel"
+                    android:layout_weight="1"
+                    android:text="@string/settings_auto_close" />
+                <Spinner
+                    android:id="@+id/spinnerAutoClose"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minWidth="120dp" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
+                android:text="@string/settings_auto_close_hint"
+                android:textColor="?attr/colorTextMuted"
+                android:textSize="12sp" />
+
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -271,6 +291,14 @@
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="8dp"
                 android:text="@string/settings_check_update" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnLicense"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                android:text="@string/settings_license" />
         </LinearLayout>
     </ScrollView>
 </LinearLayout>

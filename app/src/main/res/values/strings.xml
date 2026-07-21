@@ -77,6 +77,12 @@
     <string name="settings_section_browse">浏览</string>
     <string name="settings_section_lyrics">歌词</string>
     <string name="settings_section_power">省电与后台</string>
+    <string name="settings_auto_close">自动关闭时间</string>
+    <string name="settings_auto_close_hint">界面无操作超过该时间后停止播放并退出（后台/锁屏播放仍计时；打开界面、触摸、屏幕常亮会重置；0=不关闭）</string>
+    <string name="settings_auto_close_never">不关闭</string>
+    <string name="settings_auto_close_hours">%1$d 小时</string>
+    <string name="settings_auto_close_half_hour">30 分钟</string>
+    <string name="auto_close_exiting">空闲超时，已停止播放并退出</string>
     <string name="settings_battery_opt">电池优化</string>
     <string name="settings_battery_opt_hint">关闭对本应用的电池优化后，息屏播放更不易被系统杀掉（略增待机耗电）</string>
     <string name="settings_battery_opt_ignored">已忽略电池优化</string>
@@ -87,6 +93,9 @@
     <string name="settings_section_about">关于</string>
     <string name="settings_app_version">当前版本 %1$s</string>
     <string name="settings_check_update">检查更新</string>
+    <string name="settings_license">许可证</string>
+    <string name="settings_license_title">开源许可证</string>
+    <string name="settings_license_load_fail">无法加载许可证文本</string>
     <string name="update_checking">正在检查更新…</string>
     <string name="update_up_to_date">已是最新版本（%1$s）</string>
     <string name="update_available_title">发现新版本 %1$s</string>
@@ -131,6 +140,16 @@
     <string name="theme_teal">翡翠青</string>
     <string name="theme_violet">暮紫</string>
     <string name="theme_dark">暗夜</string>
+    <string name="theme_rose">玫瑰</string>
+    <string name="theme_indigo">靛青</string>
+    <string name="theme_lime">青柠</string>
+    <string name="theme_coral">珊瑚</string>
+    <string name="theme_pink">樱粉</string>
+    <string name="theme_cyan">青空</string>
+    <string name="theme_forest">松绿</string>
+    <string name="theme_wine">酒红</string>
+    <string name="theme_gold">流金</string>
+    <string name="theme_slate">岩灰</string>
 
     <string name="settings_section_roots">主目录</string>
     <string name="settings_roots_hint">1 屏根目录只显示下列主目录；留空则浏览全部存储（与原先一致）</string>

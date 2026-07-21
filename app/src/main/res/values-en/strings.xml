@@ -76,6 +76,12 @@
     <string name="settings_section_browse">Browse</string>
     <string name="settings_section_lyrics">Lyrics</string>
     <string name="settings_section_power">Power &amp; background</string>
+    <string name="settings_auto_close">Auto-close after idle</string>
+    <string name="settings_auto_close_hint">Stop playback and exit after no UI activity for this long (timer runs in background / lock screen; resume, touch, keep-screen-on reset it; 0 = never)</string>
+    <string name="settings_auto_close_never">Never</string>
+    <string name="settings_auto_close_hours">%1$d h</string>
+    <string name="settings_auto_close_half_hour">30 min</string>
+    <string name="auto_close_exiting">Idle timeout — stopped and exited</string>
     <string name="settings_battery_opt">Battery optimization</string>
     <string name="settings_battery_opt_hint">Ignoring battery optimization helps background playback (may use slightly more standby power)</string>
     <string name="settings_battery_opt_ignored">Battery optimization ignored</string>
@@ -86,6 +92,9 @@
     <string name="settings_section_about">About</string>
     <string name="settings_app_version">Version %1$s</string>
     <string name="settings_check_update">Check for updates</string>
+    <string name="settings_license">License</string>
+    <string name="settings_license_title">Open-source license</string>
+    <string name="settings_license_load_fail">Could not load license text</string>
     <string name="update_checking">Checking for updates…</string>
     <string name="update_up_to_date">You are up to date (%1$s)</string>
     <string name="update_available_title">Update available: %1$s</string>
@@ -121,6 +130,16 @@
     <string name="theme_teal">Teal</string>
     <string name="theme_violet">Violet</string>
     <string name="theme_dark">Dark night</string>
+    <string name="theme_rose">Rose</string>
+    <string name="theme_indigo">Indigo</string>
+    <string name="theme_lime">Lime</string>
+    <string name="theme_coral">Coral</string>
+    <string name="theme_pink">Cherry pink</string>
+    <string name="theme_cyan">Cyan sky</string>
+    <string name="theme_forest">Forest</string>
+    <string name="theme_wine">Wine</string>
+    <string name="theme_gold">Gold</string>
+    <string name="theme_slate">Slate</string>
 
     <string name="settings_section_roots">Root folders</string>
     <string name="settings_roots_hint">Browse root only shows these folders; leave empty to scan all storage</string>

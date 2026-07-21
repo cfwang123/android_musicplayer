@@ -170,6 +170,256 @@
         <item name="colorChipStroke">#C8D4E0</item>
     </style>
 
+    <!-- 玫瑰：白底 + 淡玫红 -->
+    <style name="Theme.MusicPlayer.Rose" parent="Theme.MusicPlayer">
+        <item name="colorPrimary">#D48A9A</item>
+        <item name="colorPrimaryVariant">#B86A7C</item>
+        <item name="colorSecondary">#E8B8C4</item>
+        <item name="colorAccentSoft">#F9EEF1</item>
+        <item name="colorPlayerSeek">#D48A9A</item>
+        <item name="colorPlayBtnStart">#E4A8B4</item>
+        <item name="colorPlayBtnMid">#D48A9A</item>
+        <item name="colorPlayBtnEnd">#C47888</item>
+        <item name="colorCoverStart">#F2E0E4</item>
+        <item name="colorCoverMid">#E8CCD4</item>
+        <item name="colorCoverEnd">#DCB8C4</item>
+        <item name="colorItemPlayingBg">#F9EEF1</item>
+        <item name="colorItemPlayingText">#9A4A5C</item>
+        <item name="colorItemPlayingSubtext">#A88890</item>
+        <item name="colorItemPlayingBar">#D48A9A</item>
+        <item name="colorSheetPlaying">#B86A7C</item>
+        <item name="colorLyricSung">#B86A7C</item>
+        <item name="colorIconTint">#B86A7C</item>
+        <item name="colorRippleSoft">#20D48A9A</item>
+        <item name="colorChipBg">#F9EEF1</item>
+        <item name="colorChipStroke">#E8CCD4</item>
+    </style>
+
+    <!-- 靛青：白底 + 靛蓝 -->
+    <style name="Theme.MusicPlayer.Indigo" parent="Theme.MusicPlayer">
+        <item name="colorPrimary">#7A8FD0</item>
+        <item name="colorPrimaryVariant">#5C70B4</item>
+        <item name="colorSecondary">#A8B8E4</item>
+        <item name="colorAccentSoft">#EEF0F8</item>
+        <item name="colorPlayerSeek">#7A8FD0</item>
+        <item name="colorPlayBtnStart">#9AACDC</item>
+        <item name="colorPlayBtnMid">#7A8FD0</item>
+        <item name="colorPlayBtnEnd">#687EC4</item>
+        <item name="colorCoverStart">#DCE2F2</item>
+        <item name="colorCoverMid">#C8D0E8</item>
+        <item name="colorCoverEnd">#B0BCE0</item>
+        <item name="colorItemPlayingBg">#EEF0F8</item>
+        <item name="colorItemPlayingText">#4050A0</item>
+        <item name="colorItemPlayingSubtext">#8088A8</item>
+        <item name="colorItemPlayingBar">#7A8FD0</item>
+        <item name="colorSheetPlaying">#5C70B4</item>
+        <item name="colorLyricSung">#5C70B4</item>
+        <item name="colorIconTint">#5C70B4</item>
+        <item name="colorRippleSoft">#207A8FD0</item>
+        <item name="colorChipBg">#EEF0F8</item>
+        <item name="colorChipStroke">#C8D0E8</item>
+    </style>
+
+    <!-- 青柠：白底 + 嫩绿 -->
+    <style name="Theme.MusicPlayer.Lime" parent="Theme.MusicPlayer">
+        <item name="colorPrimary">#8FBF6A</item>
+        <item name="colorPrimaryVariant">#6FA04C</item>
+        <item name="colorSecondary">#B8D8A0</item>
+        <item name="colorAccentSoft">#F0F7EA</item>
+        <item name="colorPlayerSeek">#8FBF6A</item>
+        <item name="colorPlayBtnStart">#A8D088</item>
+        <item name="colorPlayBtnMid">#8FBF6A</item>
+        <item name="colorPlayBtnEnd">#7AAE58</item>
+        <item name="colorCoverStart">#E0F0D4</item>
+        <item name="colorCoverMid">#CCE4B8</item>
+        <item name="colorCoverEnd">#B8D8A0</item>
+        <item name="colorItemPlayingBg">#F0F7EA</item>
+        <item name="colorItemPlayingText">#4A7A30</item>
+        <item name="colorItemPlayingSubtext">#7A9870</item>
+        <item name="colorItemPlayingBar">#8FBF6A</item>
+        <item name="colorSheetPlaying">#6FA04C</item>
+        <item name="colorLyricSung">#6FA04C</item>
+        <item name="colorIconTint">#6FA04C</item>
+        <item name="colorRippleSoft">#208FBF6A</item>
+        <item name="colorChipBg">#F0F7EA</item>
+        <item name="colorChipStroke">#CCE4B8</item>
+    </style>
+
+    <!-- 珊瑚：白底 + 暖橙 -->
+    <style name="Theme.MusicPlayer.Coral" parent="Theme.MusicPlayer">
+        <item name="colorPrimary">#E08A6A</item>
+        <item name="colorPrimaryVariant">#C06E50</item>
+        <item name="colorSecondary">#F0B8A0</item>
+        <item name="colorAccentSoft">#FBF0EC</item>
+        <item name="colorPlayerSeek">#E08A6A</item>
+        <item name="colorPlayBtnStart">#ECA890</item>
+        <item name="colorPlayBtnMid">#E08A6A</item>
+        <item name="colorPlayBtnEnd">#D07858</item>
+        <item name="colorCoverStart">#F4E0D8</item>
+        <item name="colorCoverMid">#ECC8B8</item>
+        <item name="colorCoverEnd">#E0B0A0</item>
+        <item name="colorItemPlayingBg">#FBF0EC</item>
+        <item name="colorItemPlayingText">#A05038</item>
+        <item name="colorItemPlayingSubtext">#A88880</item>
+        <item name="colorItemPlayingBar">#E08A6A</item>
+        <item name="colorSheetPlaying">#C06E50</item>
+        <item name="colorLyricSung">#C06E50</item>
+        <item name="colorIconTint">#C06E50</item>
+        <item name="colorRippleSoft">#20E08A6A</item>
+        <item name="colorChipBg">#FBF0EC</item>
+        <item name="colorChipStroke">#ECC8B8</item>
+    </style>
+
+    <!-- 樱粉：白底 + 浅粉 -->
+    <style name="Theme.MusicPlayer.Pink" parent="Theme.MusicPlayer">
+        <item name="colorPrimary">#E0A0B8</item>
+        <item name="colorPrimaryVariant">#C07A98</item>
+        <item name="colorSecondary">#F0C8D8</item>
+        <item name="colorAccentSoft">#FBF0F4</item>
+        <item name="colorPlayerSeek">#E0A0B8</item>
+        <item name="colorPlayBtnStart">#ECBCD0</item>
+        <item name="colorPlayBtnMid">#E0A0B8</item>
+        <item name="colorPlayBtnEnd">#D090A8</item>
+        <item name="colorCoverStart">#F4E4EC</item>
+        <item name="colorCoverMid">#EAD0DC</item>
+        <item name="colorCoverEnd">#E0BCC8</item>
+        <item name="colorItemPlayingBg">#FBF0F4</item>
+        <item name="colorItemPlayingText">#A05070</item>
+        <item name="colorItemPlayingSubtext">#A88898</item>
+        <item name="colorItemPlayingBar">#E0A0B8</item>
+        <item name="colorSheetPlaying">#C07A98</item>
+        <item name="colorLyricSung">#C07A98</item>
+        <item name="colorIconTint">#C07A98</item>
+        <item name="colorRippleSoft">#20E0A0B8</item>
+        <item name="colorChipBg">#FBF0F4</item>
+        <item name="colorChipStroke">#EAD0DC</item>
+    </style>
+
+    <!-- 青空：白底 + 天蓝 -->
+    <style name="Theme.MusicPlayer.Cyan" parent="Theme.MusicPlayer">
+        <item name="colorPrimary">#5CB8D4</item>
+        <item name="colorPrimaryVariant">#3E98B4</item>
+        <item name="colorSecondary">#98D8E8</item>
+        <item name="colorAccentSoft">#E8F6FA</item>
+        <item name="colorPlayerSeek">#5CB8D4</item>
+        <item name="colorPlayBtnStart">#80CCE0</item>
+        <item name="colorPlayBtnMid">#5CB8D4</item>
+        <item name="colorPlayBtnEnd">#48A8C4</item>
+        <item name="colorCoverStart">#D0ECF4</item>
+        <item name="colorCoverMid">#B4E0EC</item>
+        <item name="colorCoverEnd">#98D4E4</item>
+        <item name="colorItemPlayingBg">#E8F6FA</item>
+        <item name="colorItemPlayingText">#2A7A98</item>
+        <item name="colorItemPlayingSubtext">#6A98A8</item>
+        <item name="colorItemPlayingBar">#5CB8D4</item>
+        <item name="colorSheetPlaying">#3E98B4</item>
+        <item name="colorLyricSung">#3E98B4</item>
+        <item name="colorIconTint">#3E98B4</item>
+        <item name="colorRippleSoft">#205CB8D4</item>
+        <item name="colorChipBg">#E8F6FA</item>
+        <item name="colorChipStroke">#B4E0EC</item>
+    </style>
+
+    <!-- 松绿：白底 + 深绿 -->
+    <style name="Theme.MusicPlayer.Forest" parent="Theme.MusicPlayer">
+        <item name="colorPrimary">#5A9A78</item>
+        <item name="colorPrimaryVariant">#407A5C</item>
+        <item name="colorSecondary">#98C8B0</item>
+        <item name="colorAccentSoft">#EAF4EE</item>
+        <item name="colorPlayerSeek">#5A9A78</item>
+        <item name="colorPlayBtnStart">#78B498</item>
+        <item name="colorPlayBtnMid">#5A9A78</item>
+        <item name="colorPlayBtnEnd">#488A68</item>
+        <item name="colorCoverStart">#D4E8DC</item>
+        <item name="colorCoverMid">#B8D8C8</item>
+        <item name="colorCoverEnd">#9CC8B0</item>
+        <item name="colorItemPlayingBg">#EAF4EE</item>
+        <item name="colorItemPlayingText">#2A6048</item>
+        <item name="colorItemPlayingSubtext">#6A9080</item>
+        <item name="colorItemPlayingBar">#5A9A78</item>
+        <item name="colorSheetPlaying">#407A5C</item>
+        <item name="colorLyricSung">#407A5C</item>
+        <item name="colorIconTint">#407A5C</item>
+        <item name="colorRippleSoft">#205A9A78</item>
+        <item name="colorChipBg">#EAF4EE</item>
+        <item name="colorChipStroke">#B8D8C8</item>
+    </style>
+
+    <!-- 酒红：白底 + 酒红 -->
+    <style name="Theme.MusicPlayer.Wine" parent="Theme.MusicPlayer">
+        <item name="colorPrimary">#B07080</item>
+        <item name="colorPrimaryVariant">#905060</item>
+        <item name="colorSecondary">#D0A0AC</item>
+        <item name="colorAccentSoft">#F5ECF0</item>
+        <item name="colorPlayerSeek">#B07080</item>
+        <item name="colorPlayBtnStart">#C8909C</item>
+        <item name="colorPlayBtnMid">#B07080</item>
+        <item name="colorPlayBtnEnd">#A06070</item>
+        <item name="colorCoverStart">#ECDCE0</item>
+        <item name="colorCoverMid">#DCC8D0</item>
+        <item name="colorCoverEnd">#CCB0BC</item>
+        <item name="colorItemPlayingBg">#F5ECF0</item>
+        <item name="colorItemPlayingText">#703040</item>
+        <item name="colorItemPlayingSubtext">#988088</item>
+        <item name="colorItemPlayingBar">#B07080</item>
+        <item name="colorSheetPlaying">#905060</item>
+        <item name="colorLyricSung">#905060</item>
+        <item name="colorIconTint">#905060</item>
+        <item name="colorRippleSoft">#20B07080</item>
+        <item name="colorChipBg">#F5ECF0</item>
+        <item name="colorChipStroke">#DCC8D0</item>
+    </style>
+
+    <!-- 流金：白底 + 暖金 -->
+    <style name="Theme.MusicPlayer.Gold" parent="Theme.MusicPlayer">
+        <item name="colorPrimary">#D0B060</item>
+        <item name="colorPrimaryVariant">#B09040</item>
+        <item name="colorSecondary">#E8D498</item>
+        <item name="colorAccentSoft">#F9F4E8</item>
+        <item name="colorPlayerSeek">#D0B060</item>
+        <item name="colorPlayBtnStart">#E0C880</item>
+        <item name="colorPlayBtnMid">#D0B060</item>
+        <item name="colorPlayBtnEnd">#C0A050</item>
+        <item name="colorCoverStart">#F0E8D0</item>
+        <item name="colorCoverMid">#E4D8B0</item>
+        <item name="colorCoverEnd">#D8C890</item>
+        <item name="colorItemPlayingBg">#F9F4E8</item>
+        <item name="colorItemPlayingText">#8A6A20</item>
+        <item name="colorItemPlayingSubtext">#A09070</item>
+        <item name="colorItemPlayingBar">#D0B060</item>
+        <item name="colorSheetPlaying">#B09040</item>
+        <item name="colorLyricSung">#B09040</item>
+        <item name="colorIconTint">#B09040</item>
+        <item name="colorRippleSoft">#20D0B060</item>
+        <item name="colorChipBg">#F9F4E8</item>
+        <item name="colorChipStroke">#E4D8B0</item>
+    </style>
+
+    <!-- 岩灰：白底 + 蓝灰 -->
+    <style name="Theme.MusicPlayer.Slate" parent="Theme.MusicPlayer">
+        <item name="colorPrimary">#7A90A0</item>
+        <item name="colorPrimaryVariant">#5C7284</item>
+        <item name="colorSecondary">#A8B8C4</item>
+        <item name="colorAccentSoft">#EEF2F4</item>
+        <item name="colorPlayerSeek">#7A90A0</item>
+        <item name="colorPlayBtnStart">#98AAB8</item>
+        <item name="colorPlayBtnMid">#7A90A0</item>
+        <item name="colorPlayBtnEnd">#688090</item>
+        <item name="colorCoverStart">#DCE4E8</item>
+        <item name="colorCoverMid">#C8D4DC</item>
+        <item name="colorCoverEnd">#B0C0CC</item>
+        <item name="colorItemPlayingBg">#EEF2F4</item>
+        <item name="colorItemPlayingText">#3A5060</item>
+        <item name="colorItemPlayingSubtext">#7A8B9A</item>
+        <item name="colorItemPlayingBar">#7A90A0</item>
+        <item name="colorSheetPlaying">#5C7284</item>
+        <item name="colorLyricSung">#5C7284</item>
+        <item name="colorIconTint">#5C7284</item>
+        <item name="colorRippleSoft">#207A90A0</item>
+        <item name="colorChipBg">#EEF2F4</item>
+        <item name="colorChipStroke">#C8D4DC</item>
+    </style>
+
     <style name="Widget.MusicPlayer.Button" parent="Widget.MaterialComponents.Button">
         <item name="backgroundTint">?attr/colorPrimary</item>
         <item name="cornerRadius">8dp</item>

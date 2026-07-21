@@ -234,4 +234,6 @@ No media on the device, or permission not granted. Tap “Grant permission” or
 
 ## License
 
-Use as determined by the repository owner.
+This project’s original source code is released under the [MIT License](LICENSE).
+
+Third-party libraries keep their own licenses; see the notice in `LICENSE`.

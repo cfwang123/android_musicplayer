@@ -18,6 +18,16 @@ enum class AppThemeSkin(
     TEAL("teal", R.style.Theme_MusicPlayer_Teal, R.string.theme_teal),
     VIOLET("violet", R.style.Theme_MusicPlayer_Violet, R.string.theme_violet),
     DARK("dark", R.style.Theme_MusicPlayer_Dark, R.string.theme_dark),
+    ROSE("rose", R.style.Theme_MusicPlayer_Rose, R.string.theme_rose),
+    INDIGO("indigo", R.style.Theme_MusicPlayer_Indigo, R.string.theme_indigo),
+    LIME("lime", R.style.Theme_MusicPlayer_Lime, R.string.theme_lime),
+    CORAL("coral", R.style.Theme_MusicPlayer_Coral, R.string.theme_coral),
+    PINK("pink", R.style.Theme_MusicPlayer_Pink, R.string.theme_pink),
+    CYAN("cyan", R.style.Theme_MusicPlayer_Cyan, R.string.theme_cyan),
+    FOREST("forest", R.style.Theme_MusicPlayer_Forest, R.string.theme_forest),
+    WINE("wine", R.style.Theme_MusicPlayer_Wine, R.string.theme_wine),
+    GOLD("gold", R.style.Theme_MusicPlayer_Gold, R.string.theme_gold),
+    SLATE("slate", R.style.Theme_MusicPlayer_Slate, R.string.theme_slate),
     ;
 
     companion object {

@@ -10,6 +10,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
 import android.view.LayoutInflater
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ArrayAdapter
@@ -59,6 +60,7 @@ import com.whj.music.ui.BrowseAdapter
 import com.whj.music.ui.LyricsAdapter
 import com.whj.music.ui.PlaylistAdapter
 import com.whj.music.ui.ViewPager2GestureFix
+import com.whj.music.util.IdleAutoCloser
 import kotlin.math.abs
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -238,8 +240,13 @@ class MainActivity : AppCompatActivity() {
         )
 
         // 启动：始终打开上次文件夹并定位上次文件；是否自动播放由设置控制
+        // recreate（主题切换等）带 savedInstanceState，勿当冷启动自动开播
         val lastSnap = PlaybackStore.load(this)
-        if (AppSettings.resumeOnStart(this)) {
+        val coldStart = savedInstanceState == null
+        if (coldStart &&
+            !skipAutoResumeAfterSettings &&
+            AppSettings.resumeOnStart(this)
+        ) {
             pendingRestore = lastSnap
         }
 
@@ -257,14 +264,37 @@ class MainActivity : AppCompatActivity() {
         // 设置页切换主题后返回时重建
         val key = AppSettings.themeKey(this)
         if (appliedThemeKey.isNotEmpty() && key != appliedThemeKey) {
+            skipAutoResumeAfterSettings = true
             recreate()
             return
         }
         bindPlayerService()
-        // 从设置返回后刷新根目录主目录配置
+        // 从设置返回后刷新根目录主目录配置（不触发文件夹自动恢复播放）
         if (hasMediaPermission() && currentFolder.isEmpty()) {
-            loadFolder("")
+            loadFolder("", resumePlayback = !skipAutoResumeAfterSettings)
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // OnResume 算有活动，重置空闲自动关闭计时
+        IdleAutoCloser.notifyUiActivity(this)
+        // 设置返回后的首帧之后再允许正常的「打开文件夹恢复播放」
+        if (skipAutoResumeAfterSettings) {
+            binding.root.post {
+                skipAutoResumeAfterSettings = false
+            }
+        }
+    }
+
+    override fun dispatchTouchEvent(ev: MotionEvent?): Boolean {
+        if (ev != null &&
+            (ev.actionMasked == MotionEvent.ACTION_DOWN ||
+                ev.actionMasked == MotionEvent.ACTION_UP)
+        ) {
+            IdleAutoCloser.notifyUiActivity(this)
+        }
+        return super.dispatchTouchEvent(ev)
     }
 
     override fun onStop() {
@@ -308,6 +338,12 @@ class MainActivity : AppCompatActivity() {
     private fun tryConsumeRestore() {
         if (restoreAttempted) return
         if (!hasMediaPermission()) return
+        // 刚从设置返回 / 主题 recreate：只定位列表，不自动开播
+        if (skipAutoResumeAfterSettings) {
+            restoreAttempted = true
+            pendingRestore = null
+            return
+        }
         if (!AppSettings.resumeOnStart(this)) {
             restoreAttempted = true
             pendingRestore = null
@@ -916,6 +952,8 @@ class MainActivity : AppCompatActivity() {
                     true
                 }
                 item.itemId == MENU_SETTINGS -> {
+                    // 从设置返回时不自动恢复/抢播（主题 recreate 也不要）
+                    skipAutoResumeAfterSettings = true
                     startActivity(Intent(this, SettingsActivity::class.java))
                     true
                 }
@@ -1791,6 +1829,7 @@ class MainActivity : AppCompatActivity() {
         scrollToMediaId: Long? = null,
         forceRescan: Boolean = false,
         showRescanToast: Boolean = false,
+        resumePlayback: Boolean = true,
     ) {
         if (selectionMode) exitSelectionMode()
         val targetFolder = FolderBrowser.normalizeFolder(folderPath)
@@ -1803,6 +1842,8 @@ class MainActivity : AppCompatActivity() {
         val roots = AppSettings.rootFolders(this)
         val isPlaylistSpace = PlaylistPaths.isInPlaylistSpace(targetFolder)
         val isMediaBrowse = !isPlaylistSpace
+        // 从设置返回期间禁止「打开文件夹自动恢复播放」
+        val allowResume = resumePlayback && !skipAutoResumeAfterSettings
 
         // 1) 内存缓存：主线程立刻切换（无 MediaStore 查询）
         var shownFromCache = false
@@ -1821,7 +1862,7 @@ class MainActivity : AppCompatActivity() {
                     items = cached,
                     roots = roots,
                     scrollToMediaId = scrollToMediaId,
-                    resumePlayback = scrollToMediaId == null,
+                    resumePlayback = allowResume && scrollToMediaId == null,
                 )
                 shownFromCache = true
                 browse.loadingBar.visibility = View.GONE
@@ -1861,7 +1902,7 @@ class MainActivity : AppCompatActivity() {
                             items = diskItems,
                             roots = roots,
                             scrollToMediaId = scrollToMediaId,
-                            resumePlayback = scrollToMediaId == null,
+                            resumePlayback = allowResume && scrollToMediaId == null,
                         )
                         fromCache = true
                         browse.loadingBar.visibility = View.GONE
@@ -1917,7 +1958,7 @@ class MainActivity : AppCompatActivity() {
                         roots = roots,
                         scrollToMediaId = scrollToMediaId,
                         // 已从缓存展示并可能已触发恢复时，避免二次抢播
-                        resumePlayback = scrollToMediaId == null && !fromCache,
+                        resumePlayback = allowResume && scrollToMediaId == null && !fromCache,
                     )
                 }
             } catch (e: Exception) {
@@ -1987,6 +2028,7 @@ class MainActivity : AppCompatActivity() {
      * 打开文件夹后：滚动到上次曲目；若当前未在播放，则自动恢复播放与进度。
      */
     private fun maybeResumeFolderPlayback() {
+        if (skipAutoResumeAfterSettings) return
         if (!AppSettings.resumeFolderOnOpen(this)) return
         if (currentFolder.isEmpty()) return
         // 启动全局恢复尚未完成时，不抢播
@@ -2379,6 +2421,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     companion object {
+        /**
+         * 进入设置页后置 true：返回 / 主题 recreate 时不自动恢复播放。
+         * 用 companion 以便 Activity.recreate 后仍生效。
+         */
+        @JvmField
+        var skipAutoResumeAfterSettings: Boolean = false
+
         private const val LYRICS_BROWSE_IDLE_MS = 4000L
         private const val PAGE_BROWSE = 0
         private const val PAGE_PLAYER = 1

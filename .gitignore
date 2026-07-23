@@ -6,6 +6,8 @@
 *.class
 *.lnk
 
+AGENTS.md
+
 # Generated files
 bin/
 gen/

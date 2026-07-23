@@ -62,6 +62,8 @@ class MusicPlayerService : Service() {
     private var consecutiveFailures = 0
     private var pendingSeekMs = 0
     private var autoPlayOnPrepared = true
+    /** 本曲真正 start 的时间，用于过滤误触发的 onCompletion */
+    private var trackStartedElapsed: Long = 0L
     /** 播放倍速，默认 1.0 */
     private var playbackSpeed: Float = 1.0f
 
@@ -366,14 +368,23 @@ class MusicPlayerService : Service() {
         startPositionMs: Int = 0,
         autoPlay: Boolean = true,
     ) {
+        // 优先精确匹配，避免仅 id 撞车时播错曲
         val index = items.indexOfFirst { it.id == item.id && it.uri == item.uri }
             .takeIf { it >= 0 }
-            ?: items.indexOfFirst { it.id == item.id }
+            ?: items.indexOfFirst { it.uri == item.uri }.takeIf { it >= 0 }
+            ?: items.indexOfFirst {
+                !item.filePath.isNullOrBlank() && it.filePath == item.filePath
+            }.takeIf { it >= 0 }
+            ?: items.indexOfFirst { it.id == item.id && item.id != 0L }
         val folder = folderPath.ifBlank {
             item.folderPath.ifBlank { items.firstOrNull()?.folderPath.orEmpty() }
         }
         val list = if (index >= 0) items else (listOf(item) + items)
         val idx = if (index >= 0) index else 0
+        Log.i(
+            TAG,
+            "playItem title=${item.title} idx=$idx/${list.size} seekMs=$startPositionMs autoPlay=$autoPlay",
+        )
         setPlaylist(list, idx, folder, startPositionMs, autoPlay)
     }
 
@@ -815,12 +826,13 @@ class MusicPlayerService : Service() {
                     } catch (_: Exception) {
                         0
                     }
-                    // 进度接近曲末时从头播，避免一恢复就马上播完、看起来像没播
+                    // 进度接近曲末时从头播，避免一恢复就马上播完、看起来像没播。
+                    // duration 未知时禁止 seek 大进度，否则可能直接贴曲末 → onCompletion → 跳下一首。
                     val seekTo = when {
                         seek <= 0 -> 0
                         dur > 0 && seek >= dur - 1500 -> 0
-                        dur > 0 -> seek.coerceIn(0, dur - 1)
-                        else -> seek
+                        dur > 0 -> seek.coerceIn(0, (dur - 1).coerceAtLeast(0))
+                        else -> 0
                     }
                     if (seekTo > 0) {
                         mp.seekTo(seekTo)
@@ -828,6 +840,7 @@ class MusicPlayerService : Service() {
                     applyPlaybackSpeed()
                     // 绑定均衡器（默认关闭，仅启用时改音色）
                     attachEqualizer(mp.audioSessionId)
+                    trackStartedElapsed = 0L
                     if (autoPlayOnPrepared) {
                         if (!hasAudioFocus && !requestAudioFocus()) {
                             Log.w(TAG, "prepared but no focus, wait for user play: ${item.title}")
@@ -838,6 +851,7 @@ class MusicPlayerService : Service() {
                             return@setOnPreparedListener
                         }
                         mp.start()
+                        trackStartedElapsed = SystemClock.elapsedRealtime()
                         // 再设一次倍速，避免 start 后被重置
                         applyPlaybackSpeed()
                         startProgressUpdates()
@@ -855,6 +869,32 @@ class MusicPlayerService : Service() {
             }
             player.setOnCompletionListener {
                 if (session != playSession) return@setOnCompletionListener
+                // 过滤误触发：刚 start 就 completion 时不要切下一首
+                val startedAt = trackStartedElapsed
+                val playedMs = if (startedAt > 0L) {
+                    SystemClock.elapsedRealtime() - startedAt
+                } else {
+                    0L
+                }
+                val pos = try {
+                    mediaPlayer?.currentPosition ?: 0
+                } catch (_: Exception) {
+                    0
+                }
+                val dur = try {
+                    mediaPlayer?.duration?.takeIf { it > 0 } ?: 0
+                } catch (_: Exception) {
+                    0
+                }
+                if (startedAt > 0L && playedMs < 800L && (dur <= 0 || dur > 2_000)) {
+                    Log.w(
+                        TAG,
+                        "ignore early completion title=${playlist.getOrNull(currentIndex)?.title} " +
+                            "playedMs=$playedMs pos=$pos dur=$dur — restart current",
+                    )
+                    restartCurrent()
+                    return@setOnCompletionListener
+                }
                 saveCurrentPlayback()
                 onTrackCompleted()
             }

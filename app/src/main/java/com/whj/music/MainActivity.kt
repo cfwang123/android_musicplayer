@@ -360,13 +360,13 @@ class MainActivity : AppCompatActivity() {
             ensureBound()
             return
         }
-        // 若已在播放则不打断，浏览位置已在 openLastFolderAndLocate 处理
-        if (service.hasActiveSession() && service.currentState().isPlaying) {
+        // 已有播放会话则不要覆盖：用户可能刚点了列表（prepare 中 isPlaying=false），
+        // 旧逻辑会误用上次进度 seek 到曲末 → 立刻 onCompletion → 跳到下一首
+        if (service.hasActiveSession()) {
             pendingRestore = null
             restoreAttempted = true
             return
         }
-        // 已有会话但未在播（例如仅 prepare 失败）：仍用恢复逻辑重起
         restoreAttempted = true
         pendingRestore = null
         lifecycleScope.launch {
@@ -1787,6 +1787,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun playMedia(item: PlayableMedia) {
         MusicPlayerService.start(this)
+        // 用户主动点歌：取消启动恢复，避免 prepare 中被 tryConsumeRestore 抢播
+        pendingRestore = null
+        restoreAttempted = true
         pendingPlay = item
         pendingFolderResumeMs = 0
         ensureBound()
@@ -1794,7 +1797,14 @@ class MainActivity : AppCompatActivity() {
             val toPlay = pendingPlay
             pendingPlay = null
             if (toPlay != null) {
-                playerService?.playItem(toPlay, playableInFolder, currentFolder)
+                // 点列表从 0 起播，不要沿用文件夹记忆的进度（易 seek 到曲末秒切下一首）
+                playerService?.playItem(
+                    toPlay,
+                    playableInFolder,
+                    currentFolder,
+                    startPositionMs = 0,
+                    autoPlay = true,
+                )
             }
         }
     }

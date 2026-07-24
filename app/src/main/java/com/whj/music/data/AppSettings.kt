@@ -5,9 +5,14 @@ import com.whj.music.model.PlayMode
 
 /** 应用参数设置（设置界面读写） */
 object AppSettings {
+    /** 内部 RMS（相对 full-scale）；设置界面用 0～100 换算显示 */
     const val DEFAULT_VOLUME_TARGET_RMS = 0.12f
     const val MIN_VOLUME_TARGET_RMS = 0f
-    const val MAX_VOLUME_TARGET_RMS = 0.21f
+    const val MAX_VOLUME_TARGET_RMS = 0.25f
+    const val MIN_VOLUME_TARGET_UI = 0f
+    const val MAX_VOLUME_TARGET_UI = 100f
+    /** 默认目标对应 UI 刻度（0.12 / 0.25 × 100） */
+    const val DEFAULT_VOLUME_TARGET_UI = 48f
 
     private const val PREFS = "music_player_prefs"
 
@@ -144,8 +149,9 @@ object AppSettings {
     }
 
     /**
-     * 目标平均 RMS（相对 full-scale 0~1）。
-     * 默认 [DEFAULT_VOLUME_TARGET_RMS]；合法范围 [MIN_VOLUME_TARGET_RMS]..[MAX_VOLUME_TARGET_RMS]。
+     * 目标平均 RMS（相对 full-scale）。
+     * 默认 [DEFAULT_VOLUME_TARGET_RMS]；合法范围 [MIN_VOLUME_TARGET_RMS]..[MAX_VOLUME_TARGET_RMS]（0～0.25）。
+     * 设置界面展示为 0～100，见 [volumeTargetUi] / [rmsToUi]。
      */
     fun volumeTargetRms(context: Context): Float {
         val v = prefs(context).getFloat(KEY_VOLUME_TARGET_RMS, DEFAULT_VOLUME_TARGET_RMS)
@@ -159,6 +165,24 @@ object AppSettings {
                 value.coerceIn(MIN_VOLUME_TARGET_RMS, MAX_VOLUME_TARGET_RMS),
             )
             .apply()
+    }
+
+    /** 设置界面用 0～100；内部仍存 RMS */
+    fun volumeTargetUi(context: Context): Float = rmsToUi(volumeTargetRms(context))
+
+    fun setVolumeTargetUi(context: Context, ui: Float) {
+        setVolumeTargetRms(context, uiToRms(ui))
+    }
+
+    fun rmsToUi(rms: Float): Float {
+        if (MAX_VOLUME_TARGET_RMS <= 0f) return 0f
+        return (rms / MAX_VOLUME_TARGET_RMS * MAX_VOLUME_TARGET_UI)
+            .coerceIn(MIN_VOLUME_TARGET_UI, MAX_VOLUME_TARGET_UI)
+    }
+
+    fun uiToRms(ui: Float): Float {
+        return (ui.coerceIn(MIN_VOLUME_TARGET_UI, MAX_VOLUME_TARGET_UI) / MAX_VOLUME_TARGET_UI) *
+            MAX_VOLUME_TARGET_RMS
     }
 
     /** 均衡器：默认关闭 */

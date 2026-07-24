@@ -1033,7 +1033,10 @@ class MainActivity : AppCompatActivity() {
         } else {
             getString(R.string.track_details_off)
         }
-        val targetLabel = getString(R.string.settings_volume_target_fmt, norm.targetRms)
+        val targetLabel = getString(
+            R.string.settings_volume_target_fmt,
+            AppSettings.rmsToUi(norm.targetRms),
+        )
         val rmsLabel = when {
             norm.analyzing && norm.trackRms == null ->
                 getString(R.string.track_details_analyzing)

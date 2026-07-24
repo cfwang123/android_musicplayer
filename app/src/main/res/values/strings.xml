@@ -114,9 +114,9 @@
     <string name="settings_volume_normalize">自动统一音量</string>
     <string name="settings_volume_normalize_hint">分析曲目平均响度并缩放到统一水平；过响压低、过轻提升。首次播放会短暂分析并缓存</string>
     <string name="settings_volume_target">目标平均音量</string>
-    <string name="settings_volume_target_hint">手动输入 0～0.21（相对 full-scale 的平均 RMS）；默认 0.12；数值越大整体越响；退出设置后应用到当前曲目</string>
-    <string name="settings_volume_target_invalid">请输入 0～0.21 之间的数字</string>
-    <string name="settings_volume_target_fmt">%1$.3f</string>
+    <string name="settings_volume_target_hint">手动输入 0～100；默认 48；数值越大整体越响；退出设置后应用到当前曲目</string>
+    <string name="settings_volume_target_invalid">请输入 0～100 之间的数字</string>
+    <string name="settings_volume_target_fmt">%1$.0f</string>
     <string name="menu_track_details">详细信息</string>
     <string name="track_details_title">曲目信息</string>
     <string name="track_details_none">当前没有曲目</string>

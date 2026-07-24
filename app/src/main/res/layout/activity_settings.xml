@@ -136,7 +136,7 @@
                     android:layout_width="100dp"
                     android:layout_height="wrap_content"
                     android:gravity="end|center_vertical"
-                    android:hint="0.12"
+                    android:hint="48"
                     android:imeOptions="actionDone"
                     android:inputType="numberDecimal"
                     android:maxLines="1"

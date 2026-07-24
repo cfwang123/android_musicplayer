@@ -194,7 +194,7 @@ class SettingsActivity : AppCompatActivity() {
         binding.switchKeepSpeed.isChecked = AppSettings.keepSpeedAcrossTracks(this)
         binding.switchVolumeNormalize.isChecked = AppSettings.volumeNormalizeEnabled(this)
         binding.editVolumeTarget.setText(
-            formatVolumeTargetInput(AppSettings.volumeTargetRms(this)),
+            formatVolumeTargetInput(AppSettings.volumeTargetUi(this)),
         )
         binding.switchAutoLocate.isChecked = AppSettings.autoLocateOnBrowse(this)
         binding.switchResume.isChecked = AppSettings.resumeOnStart(this)
@@ -231,31 +231,33 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     /**
-     * 退出设置时解析并保存目标 RMS（0～0.21），非法则提示并保留原值。
-     * 不在输入过程中应用；保存后由 [saveAll] 统一 [MusicPlayerService.reapplyVolumeNormalize]。
+     * 退出设置时解析并保存目标平均音量（界面 0～100），非法则提示并保留原值。
+     * 内部换算为 RMS 0～0.25；保存后由 [saveAll] 统一 [MusicPlayerService.reapplyVolumeNormalize]。
      */
     private fun parseAndSaveVolumeTarget() {
         val raw = binding.editVolumeTarget.text?.toString()?.trim().orEmpty()
         val parsed = raw.replace(',', '.').toFloatOrNull()
-        val value = if (parsed == null) {
+        val ui = if (parsed == null) {
             Toast.makeText(this, R.string.settings_volume_target_invalid, Toast.LENGTH_SHORT).show()
-            AppSettings.volumeTargetRms(this)
+            AppSettings.volumeTargetUi(this)
         } else {
             parsed.coerceIn(
-                AppSettings.MIN_VOLUME_TARGET_RMS,
-                AppSettings.MAX_VOLUME_TARGET_RMS,
+                AppSettings.MIN_VOLUME_TARGET_UI,
+                AppSettings.MAX_VOLUME_TARGET_UI,
             )
         }
-        AppSettings.setVolumeTargetRms(this, value)
-        binding.editVolumeTarget.setText(formatVolumeTargetInput(value))
+        AppSettings.setVolumeTargetUi(this, ui)
+        binding.editVolumeTarget.setText(formatVolumeTargetInput(ui))
     }
 
-    private fun formatVolumeTargetInput(value: Float): String {
-        // 去掉多余尾零，便于手改
-        return String.format(java.util.Locale.US, "%.3f", value)
-            .trimEnd('0')
-            .trimEnd('.')
-            .ifEmpty { "0" }
+    private fun formatVolumeTargetInput(ui: Float): String {
+        // 0～100，优先整数；有小数则最多 1 位
+        val rounded = kotlin.math.round(ui * 10f) / 10f
+        return if (kotlin.math.abs(rounded - rounded.toInt()) < 0.05f) {
+            rounded.toInt().toString()
+        } else {
+            String.format(java.util.Locale.US, "%.1f", rounded)
+        }
     }
 
     private fun showLicenseDialog() {

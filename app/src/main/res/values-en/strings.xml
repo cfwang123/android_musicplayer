@@ -113,9 +113,9 @@
     <string name="settings_volume_normalize">Normalize volume</string>
     <string name="settings_volume_normalize_hint">Analyze average loudness and scale tracks to a shared level; first play may analyze briefly and cache the result</string>
     <string name="settings_volume_target">Target average level</string>
-    <string name="settings_volume_target_hint">Enter 0–0.21 (mean RMS vs full-scale); default 0.12; higher = louder; applied to the current track when you leave Settings</string>
-    <string name="settings_volume_target_invalid">Enter a number between 0 and 0.21</string>
-    <string name="settings_volume_target_fmt">%1$.3f</string>
+    <string name="settings_volume_target_hint">Enter 0–100; default 48; higher = louder; applied to the current track when you leave Settings</string>
+    <string name="settings_volume_target_invalid">Enter a number between 0 and 100</string>
+    <string name="settings_volume_target_fmt">%1$.0f</string>
     <string name="menu_track_details">Details</string>
     <string name="track_details_title">Track details</string>
     <string name="track_details_none">Nothing playing</string>

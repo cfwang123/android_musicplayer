@@ -1,9 +1,13 @@
 package com.whj.music
 
+import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
+import android.content.ServiceConnection
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.IBinder
 import android.os.PowerManager
 import android.provider.Settings
 import android.view.LayoutInflater
@@ -23,6 +27,7 @@ import com.whj.music.data.MediaTreeCache
 import com.whj.music.data.PlayModeStore
 import com.whj.music.databinding.ActivitySettingsBinding
 import com.whj.music.model.PlayMode
+import com.whj.music.player.MusicPlayerService
 import com.whj.music.ui.AppTheme
 import com.whj.music.ui.AppThemeSkin
 import com.whj.music.util.AppUpdate
@@ -37,6 +42,22 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 class SettingsActivity : AppCompatActivity() {
     private lateinit var binding: ActivitySettingsBinding
+
+    /** 退出设置时绑定服务，把音量归一化参数应用到当前曲 */
+    private var playerService: MusicPlayerService? = null
+    private var playerBound = false
+
+    private val playerConnection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
+            playerService = (service as MusicPlayerService.LocalBinder).getService()
+            playerBound = true
+        }
+
+        override fun onServiceDisconnected(name: ComponentName?) {
+            playerService = null
+            playerBound = false
+        }
+    }
 
     private val speeds = floatArrayOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f, 3.0f)
     private val modes = arrayOf(
@@ -171,6 +192,10 @@ class SettingsActivity : AppCompatActivity() {
         binding.spinnerLyricSeek.setSelection(seekIdx)
 
         binding.switchKeepSpeed.isChecked = AppSettings.keepSpeedAcrossTracks(this)
+        binding.switchVolumeNormalize.isChecked = AppSettings.volumeNormalizeEnabled(this)
+        binding.editVolumeTarget.setText(
+            formatVolumeTargetInput(AppSettings.volumeTargetRms(this)),
+        )
         binding.switchAutoLocate.isChecked = AppSettings.autoLocateOnBrowse(this)
         binding.switchResume.isChecked = AppSettings.resumeOnStart(this)
         binding.switchResumeFolder.isChecked = AppSettings.resumeFolderOnOpen(this)
@@ -203,6 +228,34 @@ class SettingsActivity : AppCompatActivity() {
         binding.btnLicense.setOnClickListener { showLicenseDialog() }
         refreshRootFoldersUi()
         refreshBatteryOptUi()
+    }
+
+    /**
+     * 退出设置时解析并保存目标 RMS（0～0.21），非法则提示并保留原值。
+     * 不在输入过程中应用；保存后由 [saveAll] 统一 [MusicPlayerService.reapplyVolumeNormalize]。
+     */
+    private fun parseAndSaveVolumeTarget() {
+        val raw = binding.editVolumeTarget.text?.toString()?.trim().orEmpty()
+        val parsed = raw.replace(',', '.').toFloatOrNull()
+        val value = if (parsed == null) {
+            Toast.makeText(this, R.string.settings_volume_target_invalid, Toast.LENGTH_SHORT).show()
+            AppSettings.volumeTargetRms(this)
+        } else {
+            parsed.coerceIn(
+                AppSettings.MIN_VOLUME_TARGET_RMS,
+                AppSettings.MAX_VOLUME_TARGET_RMS,
+            )
+        }
+        AppSettings.setVolumeTargetRms(this, value)
+        binding.editVolumeTarget.setText(formatVolumeTargetInput(value))
+    }
+
+    private fun formatVolumeTargetInput(value: Float): String {
+        // 去掉多余尾零，便于手改
+        return String.format(java.util.Locale.US, "%.3f", value)
+            .trimEnd('0')
+            .trimEnd('.')
+            .ifEmpty { "0" }
     }
 
     private fun showLicenseDialog() {
@@ -240,6 +293,26 @@ class SettingsActivity : AppCompatActivity() {
             .setView(scroll)
             .setPositiveButton(android.R.string.ok, null)
             .show()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        // 绑定播放服务：退出设置（onPause/saveAll）时应用到当前曲
+        val intent = Intent(this, MusicPlayerService::class.java)
+        bindService(intent, playerConnection, Context.BIND_AUTO_CREATE)
+    }
+
+    override fun onStop() {
+        if (playerBound) {
+            try {
+                unbindService(playerConnection)
+            } catch (_: Exception) {
+                // ignore
+            }
+            playerBound = false
+            playerService = null
+        }
+        super.onStop()
     }
 
     override fun onResume() {
@@ -590,6 +663,10 @@ class SettingsActivity : AppCompatActivity() {
         AppSettings.setLyricSentenceSeekMaxMinutes(this, seekMin)
 
         AppSettings.setKeepSpeedAcrossTracks(this, binding.switchKeepSpeed.isChecked)
+        AppSettings.setVolumeNormalizeEnabled(this, binding.switchVolumeNormalize.isChecked)
+        parseAndSaveVolumeTarget()
+        // 退出设置界面时再应用到当前播放（输入过程中不改音量）
+        playerService?.reapplyVolumeNormalize()
         AppSettings.setAutoLocateOnBrowse(this, binding.switchAutoLocate.isChecked)
         AppSettings.setResumeOnStart(this, binding.switchResume.isChecked)
         AppSettings.setResumeFolderOnOpen(this, binding.switchResumeFolder.isChecked)
@@ -625,4 +702,5 @@ class SettingsActivity : AppCompatActivity() {
             String.format(java.util.Locale.US, "%.2f", speed).trimEnd('0').trimEnd('.')
         }
     }
+
 }

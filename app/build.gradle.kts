@@ -13,8 +13,8 @@ android {
         applicationId = "com.whj.music"
         minSdk = 24
         targetSdk = 34
-        versionCode = 3
-        versionName = "1.0.2"
+        versionCode = 4
+        versionName = "1.0.3"
     }
 
     // 与 reader / krdict 相同：keystore.properties + release.keystore

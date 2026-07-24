@@ -15,12 +15,22 @@ object FolderPlaybackStore {
     data class Snapshot(
         val media: PlayableMedia,
         val positionMs: Int,
+        val updatedAtMs: Long = 0L,
+    )
+
+    /** 有播放记录的文件夹摘要（「播放记录」列表用） */
+    data class FolderEntry(
+        val folderPath: String,
+        val mediaTitle: String,
+        val updatedAtMs: Long,
     )
 
     fun save(context: Context, media: PlayableMedia?, positionMs: Int) {
         if (media == null) return
         val folder = FolderBrowser.normalizeFolder(media.folderPath)
         if (folder.isEmpty()) return
+        // 播放列表虚拟路径不记入
+        if (PlaylistPaths.isInPlaylistSpace(folder)) return
         val p = prefix(folder)
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putLong(p + "id", media.id)
@@ -32,6 +42,7 @@ object FolderPlaybackStore {
             .putString(p + "file_path", media.filePath)
             .putBoolean(p + "is_video", media.isVideo)
             .putInt(p + "position", positionMs.coerceAtLeast(0))
+            .putLong(p + "updated", System.currentTimeMillis())
             .apply()
     }
 
@@ -53,7 +64,53 @@ object FolderPlaybackStore {
             folderPath = prefs.getString(p + "folder", null) ?: folder,
             filePath = prefs.getString(p + "file_path", null),
         )
-        return Snapshot(media, prefs.getInt(p + "position", 0))
+        return Snapshot(
+            media = media,
+            positionMs = prefs.getInt(p + "position", 0),
+            updatedAtMs = prefs.getLong(p + "updated", 0L),
+        )
+    }
+
+    /** 该文件夹是否有上次播放记录（用于列表绿点标记） */
+    fun has(context: Context, folderPath: String): Boolean {
+        val folder = FolderBrowser.normalizeFolder(folderPath)
+        if (folder.isEmpty()) return false
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        return prefs.contains(prefix(folder) + "uri")
+    }
+
+    /**
+     * 列出全部有记录的文件夹，按 [FolderEntry.updatedAtMs] 降序。
+     * 旧数据无 updated 时排在末尾（仍保留）。
+     */
+    fun listAll(context: Context): List<FolderEntry> {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val prefixes = prefs.all.keys
+            .asSequence()
+            .filter { it.startsWith("f_") && it.endsWith("_uri") }
+            .map { it.removeSuffix("uri") }
+            .distinct()
+            .toList()
+        val out = ArrayList<FolderEntry>(prefixes.size)
+        for (p in prefixes) {
+            val folder = FolderBrowser.normalizeFolder(
+                prefs.getString(p + "folder", null).orEmpty(),
+            )
+            if (folder.isEmpty()) continue
+            if (PlaylistPaths.isInPlaylistSpace(folder)) continue
+            if (!prefs.contains(p + "uri")) continue
+            out.add(
+                FolderEntry(
+                    folderPath = folder,
+                    mediaTitle = prefs.getString(p + "title", null).orEmpty().ifBlank { "未知曲目" },
+                    updatedAtMs = prefs.getLong(p + "updated", 0L),
+                ),
+            )
+        }
+        return out.sortedWith(
+            compareByDescending<FolderEntry> { it.updatedAtMs }
+                .thenBy { it.folderPath },
+        )
     }
 
     private fun prefix(folder: String): String {

@@ -2,7 +2,9 @@
 
 An Android app for browsing local media folders and playing audio in the background.
 
-[中文说明](README.zh.md)
+[中文说明](README.zh.md) · [Changelog](CHANGELOG.md)
+
+**Current version: 1.0.3**
 
 ## Screenshots
 
@@ -10,7 +12,7 @@ An Android app for browsing local media folders and playing audio in the backgro
 |:---:|:---:|:---:|
 | <img src="screenshots/1.jpg" width="240" alt="Browse and playlist" /> | <img src="screenshots/2.jpg" width="240" alt="Player" /> | <img src="screenshots/3.jpg" width="240" alt="Lyrics" /> |
 
-- **Page 1**: Folders / playlists, current track highlight, bottom controls  
+- **Page 1**: Folders / playlists, current-track highlight, bottom controls  
 - **Page 2**: Cover, progress, favorite & add-to-playlist, speed / sleep timer, mini lyrics  
 - **Page 3**: Full-screen lyrics (bilingual), karaoke highlight  
 
@@ -21,11 +23,13 @@ More images: [`screenshots/`](screenshots/).
 | Item | Value |
 |------|--------|
 | App name | Music Player |
+| Package | `com.whj.music` |
+| Version | 1.0.3 (`versionCode` 4) |
 | Language | Kotlin |
 | minSdk | 24 (Android 7.0+) |
 | targetSdk / compileSdk | 34 |
 | Build | Gradle 8.4 + AGP 8.3.2 |
-| JDK | 17 (optional `org.gradle.java.home` in local `gradle.properties`; do not commit real paths) |
+| JDK | 17+ (21 recommended; set `JAVA_HOME` or local `org.gradle.java.home` — do not commit machine paths) |
 | Paths | If the project path has non-ASCII characters, keep `android.overridePathCheck=true` (already set) |
 
 ## Features
@@ -36,16 +40,22 @@ More images: [`screenshots/`](screenshots/).
 | Media scan | MediaStore audio + video (audio only) |
 | Root folders | Configurable roots (system folder picker) |
 | Playlists | User playlists; add / remove / drag reorder; stored locally |
-| Multi-select | Long-press on page 1: batch add to playlist, batch delete files; in a playlist: batch remove |
-| Play modes | Repeat one / folder / next folder / shuffle |
-| Progress memory | Last track globally; per-folder memory; launch locate; auto-locate on track change while on browse page |
+| Favorites | Heart on list and player; “Favorites” under Playlists |
+| Playback history | Playlists → **Playback history**: folders with play records (newest first); open jumps to folder; back returns to history |
+| Multi-select | Long-press on page 1: batch add to playlist, batch delete; in a playlist: batch remove |
+| Play modes | Repeat one / folder / next folder / **shuffle** (shuffle list once; next/prev follow that order until shuffle is re-entered) |
+| Progress memory | Global last track; **per-folder** memory; launch locate; auto-locate on track change while on browse page |
+| Folder resume | Optional auto-resume when **entering** a folder (not when going up); if already playing, only scroll + **green-dot** last track; long-press folder → “Resume last playback” |
+| Browse UX | Going up restores parent scroll; last track green-dot; folders with history show a green-dot on the icon |
+| Volume normalize | Optional shared loudness (RMS sample + cache); settings target RMS; Details menu shows gain |
 | Lyrics | Same-name `.lrc` beside the file; karaoke + seek |
 | Sleep timer / speed | Supported |
-| Favorites | Heart on list and player pages |
 | Equalizer | Off by default; bar button |
+| Idle auto-close | Settings: stop and exit after UI idle (default 2 h); continues in background / lock screen |
 | Lock screen | MediaSession controls |
+| Updates | Settings: check GitHub Releases (`android_musicplayer`) |
 | Languages | Chinese / English / system default |
-| Themes | Light multi-skin UI |
+| Themes | Light multi-skin UI (extra accent packs) |
 | File ops | Multi-select batch delete (system confirm); add to playlist |
 
 ### Playlists (brief)
@@ -54,6 +64,7 @@ More images: [`screenshots/`](screenshots/).
 2. **Long-press files** for multi-select → “Add to list” (existing or new) or batch delete  
 3. **Inside a playlist**, long-press → “Remove from list”; drag handles reorder while multi-select is on  
 4. **Player page (top-right)** add-to-list icon → pick a list or create one  
+5. **Playback history** under Playlists → folders with per-folder play records  
 
 Playlists store references and order only; deleting a playlist does not delete media files on the device.
 
@@ -77,7 +88,7 @@ Playlists store references and order only; deleting a playlist does not delete m
 sdk.dir=path/to/Android/Sdk
 ```
 
-2. JDK 17: set `JAVA_HOME` / PATH, or set `org.gradle.java.home` in **your local** `gradle.properties` (do not push real paths).  
+2. JDK 17+: set `JAVA_HOME` / PATH, or set `org.gradle.java.home` in **your local** `gradle.properties` (do not push real paths).  
 3. `adb` on PATH (or SDK `platform-tools`). USB debugging enabled on the device.
 
 ```powershell
@@ -98,7 +109,7 @@ Notes:
 | Topic | Detail |
 |-------|--------|
 | Android Studio | Prefer **Hedgehog / Iguana or newer** (AGP 8.3 support) |
-| Gradle JDK | **Settings → Build → Gradle → Gradle JDK** → JDK **17** |
+| Gradle JDK | **Settings → Build → Gradle → Gradle JDK** → JDK **17+** |
 | `org.gradle.java.home` | If set in local `gradle.properties`, it overrides the IDE JDK; fix or remove a wrong path if Sync fails |
 | `local.properties` | AS usually writes `sdk.dir` on first open |
 | Non-ASCII path | `android.overridePathCheck=true` is already set for Chinese paths on Windows; if issues persist, try an ASCII-only path |
@@ -109,7 +120,7 @@ Notes:
 From the `music-player/` project root:
 
 ```powershell
-# Build release (assembleRelease)
+# Build release APK → release/music{version}.apk
 node build.js release
 
 # Rebuild release only if sources are newer, then install & launch
@@ -151,6 +162,7 @@ Typical APK paths (release name includes versionName):
 ```
 app/build/outputs/apk/debug/app-debug.apk
 app/build/outputs/apk/release/music*.apk
+release/music1.0.3.apk
 ```
 
 Release signing uses `keystore.properties` + `release.keystore` (shared with debug when configured so reinstall keeps data). Do not commit secrets; see `keystore.properties.example`.
@@ -167,9 +179,8 @@ Incremental builds usually do not need `clean`.
 ### Logcat / uninstall
 
 ```powershell
-# applicationId: see app/build.gradle.kts
 adb logcat | Select-String "AndroidRuntime"
-adb uninstall <applicationId>
+adb uninstall com.whj.music
 ```
 
 ## Project layout
@@ -183,12 +194,13 @@ music-player/
 │       ├── java/com/whj/music/
 │       │   ├── MusicApp.kt
 │       │   ├── MainActivity.kt
-│       │   ├── data/            # browse, favorites, playlists, settings
-│       │   ├── player/          # foreground service, equalizer
+│       │   ├── data/            # browse, favorites, playlists, folder history, settings
+│       │   ├── player/          # foreground service, equalizer, volume normalize
 │       │   ├── ui/              # adapters
 │       │   └── …
 │       └── res/                 # layouts, themes, i18n
 ├── screenshots/                 # UI screenshots (shown above)
+├── release/                     # packaged release APKs (e.g. music1.0.3.apk)
 ├── gradle/wrapper/
 ├── build.gradle.kts
 ├── settings.gradle.kts
@@ -196,6 +208,7 @@ music-player/
 ├── local.properties             # local SDK path, do not commit
 ├── gradlew.bat
 ├── build.js
+├── CHANGELOG.md
 ├── keystore.properties.example
 ├── README.md                    # English (this file)
 └── README.zh.md                 # Chinese
@@ -220,7 +233,7 @@ Check `sdk.dir` in `local.properties`.
 
 ### Wrong JDK for Gradle
 
-Install JDK 17 and set `JAVA_HOME`, or set `org.gradle.java.home` in **local** `gradle.properties` (do not commit machine-specific paths).
+Install JDK 17+ and set `JAVA_HOME`, or set `org.gradle.java.home` in **local** `gradle.properties` (do not commit machine-specific paths).
 
 ### adb shows no device
 

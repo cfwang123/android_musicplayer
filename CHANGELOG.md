@@ -1,5 +1,39 @@
 # Changelog / 更新日志
 
+## 1.0.3 — 2026-07-24
+
+### English
+
+**New**
+- Volume normalize: measure average RMS (multi-segment sample), scale tracks to a shared loudness; settings toggle (on by default); first play caches by mediaId; loud tracks attenuated via `setVolume`, quiet tracks boosted via `LoudnessEnhancer`
+- Settings: target average loudness as manual input (0–0.21 RMS)
+- Overflow menu → Details: current track metadata, average RMS, applied gain multiplier
+- Browse list: green-dot badge on folder icons that have per-folder playback history
+- Folder long-press menu: “Resume last playback” when the folder has history (force-plays, may interrupt current track)
+- Playlists → Playback history: virtual folder listing folders with play records (newest first); open jumps to that folder; back returns to history
+
+**Changed**
+- Folder resume: auto-resume only when tapping into a folder; going up / back does not resume; no “Resumed” toast; while already playing, only scroll + green-dot last track (no interrupt / no playing-row bg)
+- Going up restores the parent list scroll position and still shows a green-dot on that folder’s last track
+- Shuffle: shuffle playlist once when entering shuffle (or loading a list in shuffle); next/prev follow that order until shuffle is re-entered
+- Lyrics page: current line no longer uses a larger font size (color / bold highlight unchanged)
+
+### 中文
+
+**新增**
+- 自动统一音量：多段采样计算曲目平均 RMS，缩放到统一响度；设置开关（默认开）；按 mediaId 缓存，首次播放后复用；过响用 `setVolume` 压低，过轻用 `LoudnessEnhancer` 提升
+- 设置：目标平均音量可手动输入（0～0.21 RMS）
+- 右上菜单「详细信息」：当前曲目元数据、平均音量、放大倍数
+- 浏览列表：有播放记录的目录图标显示绿色小点
+- 有记录的文件夹长按菜单：「恢复上次播放」（强制起播，可打断当前播放）
+- 播放列表 →「播放记录」虚文件夹：列出有记录的目录（按上次播放时间）；点进真实目录，后退回到播放记录
+
+**变更**
+- 打开文件夹恢复播放：仅点击进入目录时；返回上一级不恢复；不再 Toast；**正在播放时只定位+绿色小点标记上次曲目（非播放底色），不抢播**
+- 返回上一级：恢复进入子目录前的列表滚动位置，并为上次曲目显示绿点
+- 随机模式：进入时对列表打乱一次，上/下一首按该顺序；再次切入随机才重新打乱
+- 歌词页：当前句不再放大字号（颜色 / 加粗高亮不变）
+
 ## 1.0.2 — 2026-07-21
 
 ### English

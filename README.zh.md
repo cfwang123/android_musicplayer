@@ -2,7 +2,9 @@
 
 本机媒体文件夹浏览与后台播放的 Android 应用。
 
-[English](README.md)
+[English](README.md) · [更新日志](CHANGELOG.md)
+
+**当前版本：1.0.3**
 
 ## 截图
 
@@ -18,14 +20,15 @@
 
 ## 简介
 
-| 项 | 说明 | 
+| 项 | 说明 |
 |----|------|
 | 应用名 | 音乐播放器 |
+| 版本 | 1.0.3（`versionCode` 4） |
 | 语言 | Kotlin |
 | minSdk | 24（Android 7.0+） |
 | targetSdk / compileSdk | 34 |
 | 构建 | Gradle 8.4 + AGP 8.3.2 |
-| JDK | 17（可在本机 `gradle.properties` 配置 `org.gradle.java.home`，真实路径勿提交） |
+| JDK | 17+（推荐 21；`JAVA_HOME` 或本机 `org.gradle.java.home`，真实路径勿提交） |
 | 路径 | 目录名含中文时需 `android.overridePathCheck=true`（已配置） |
 
 ## 主要功能
@@ -36,16 +39,22 @@
 | 媒体扫描 | MediaStore 音频 + 视频（仅播声音） |
 | 主目录 | 可配置根目录入口（系统选目录） |
 | 播放列表 | 用户自建列表；加入 / 移出 / 拖动排序；列表数据本地持久化 |
+| 收藏 | 列表与播放页红心；播放列表下「收藏歌曲」 |
+| 播放记录 | 播放列表 → **播放记录**：有记录的真实目录（按时间新→旧）；点进目录，后退回到播放记录 |
 | 多选操作 | 1 屏长按多选：批量加入列表、批量删除文件；列表内批量移出 |
-| 播放模式 | 单曲 / 文件夹循环 / 下一文件夹 / 随机 |
-| 进度记忆 | 全局上次曲目；按文件夹记忆；启动定位；1 屏切歌时自动定位文件夹与文件 |
+| 播放模式 | 单曲 / 文件夹循环 / 下一文件夹 / **随机**（进入时打乱一次，上/下首按该顺序，再进随机才重排） |
+| 进度记忆 | 全局上次曲目；**按文件夹**记忆；启动定位；1 屏切歌时自动定位 |
+| 打开文件夹恢复 | 可选：仅**点进**目录时自动恢复（返回上一级不恢复）；若正在播放只定位 + **绿点**标记上次曲；长按文件夹「恢复上次播放」 |
+| 浏览体验 | 返回上一级恢复进入前的滚动位置；上次曲目绿点；有记录的文件夹图标绿点 |
+| 统一音量 | 可选：多段 RMS 采样拉齐响度；设置目标 RMS；菜单「详细信息」可看增益 |
 | 歌词 | 同目录同名 `.lrc`，卡拉 OK 进度、滚动跳转 |
 | 定时关闭 / 倍速 | 支持 |
-| 收藏 | 列表与播放页红心 |
 | 均衡器 | 默认关闭，底栏按钮 |
+| 空闲自动关闭 | 设置：UI 无操作后停播并退出（默认 2 小时）；后台/锁屏仍计时 |
 | 锁屏控制 | MediaSession |
+| 检查更新 | 设置：从 GitHub Releases（`android_musicplayer`）检查并安装 |
 | 多语言 | 中文 / English / 跟随系统 |
-| 主题 | 白底淡色多皮肤 |
+| 主题 | 白底淡色多皮肤（含多套点缀色） |
 | 文件操作 | 多选批量删除（系统确认）；加入播放列表 |
 
 ### 播放列表用法（简要）
@@ -54,6 +63,7 @@
 2. **长按文件**进入多选 →「加入列表」到已有列表或「新播放列表」；或批量删除文件  
 3. **进入某个播放列表**后长按多选 →「移出列表」；多选后可用行尾手柄**拖动排序**  
 4. **2 屏右上**「加入列表」图标 → 下拉选择目标列表或新建  
+5. **播放列表 → 播放记录** → 查看有播放记忆的文件夹  
 
 播放列表仅保存引用与顺序，删除列表不会删除设备上的媒体文件。
 
@@ -77,7 +87,7 @@
 sdk.dir=你的/Android/Sdk路径
 ```
 
-2. JDK 17：设置 `JAVA_HOME` / PATH，或在**本机** `gradle.properties` 中设置 `org.gradle.java.home`（勿提交真实路径）。  
+2. JDK 17+：设置 `JAVA_HOME` / PATH，或在**本机** `gradle.properties` 中设置 `org.gradle.java.home`（勿提交真实路径）。  
 3. `adb` 在 PATH 中（或使用 SDK `platform-tools`）。真机开启 USB 调试。
 
 ```powershell
@@ -98,7 +108,7 @@ adb devices
 | 项 | 说明 |
 |----|------|
 | Android Studio 版本 | 建议 **Hedgehog / Iguana 及以后**（支持 AGP 8.3） |
-| Gradle JDK | **Settings → Build → Gradle → Gradle JDK** 选择 **JDK 17** |
+| Gradle JDK | **Settings → Build → Gradle → Gradle JDK** 选择 **JDK 17+** |
 | `org.gradle.java.home` | 若本机 `gradle.properties` 里配置了该项，会覆盖 IDE 的 JDK；路径错误会导致 Sync 失败，可改正或删掉 |
 | `local.properties` | AS 首次打开时一般会自动写入 `sdk.dir` |
 | 中文路径 | 已配置 `android.overridePathCheck=true`；若仍异常，可尝试放到纯英文路径 |
@@ -109,7 +119,7 @@ adb devices
 在项目根目录 `music-player/`：
 
 ```powershell
-# 编译 release（assembleRelease）
+# 编译 release → release/music{version}.apk
 node build.js release
 
 # 按源码修改时间决定是否编 release，再安装并启动
@@ -151,6 +161,7 @@ node build.js apk
 ```
 app/build/outputs/apk/debug/app-debug.apk
 app/build/outputs/apk/release/music*.apk
+release/music1.0.3.apk
 ```
 
 Release 使用 `keystore.properties` + `release.keystore` 签名（与 debug 共用时可覆盖安装保留数据）；密钥文件勿提交仓库，见 `keystore.properties.example`。
@@ -167,9 +178,8 @@ Release 使用 `keystore.properties` + `release.keystore` 签名（与 debug 共
 ### logcat / 卸载
 
 ```powershell
-# applicationId 见 app/build.gradle.kts
 adb logcat | Select-String "AndroidRuntime"
-adb uninstall <applicationId>
+adb uninstall com.whj.music
 ```
 
 ## 目录结构
@@ -183,12 +193,13 @@ music-player/
 │       ├── java/com/whj/music/
 │       │   ├── MusicApp.kt
 │       │   ├── MainActivity.kt
-│       │   ├── data/            # 浏览、收藏、播放列表、设置等
-│       │   ├── player/          # 前台服务、均衡器
+│       │   ├── data/            # 浏览、收藏、播放列表、文件夹记录、设置等
+│       │   ├── player/          # 前台服务、均衡器、音量归一
 │       │   ├── ui/              # 列表适配器等
 │       │   └── …
 │       └── res/                 # 布局、主题、多语言
 ├── screenshots/                 # 界面截图（README 展示）
+├── release/                     # 发布包（如 music1.0.3.apk）
 ├── gradle/wrapper/
 ├── build.gradle.kts
 ├── settings.gradle.kts
@@ -196,6 +207,7 @@ music-player/
 ├── local.properties             # 本机 SDK，勿提交
 ├── gradlew.bat
 ├── build.js
+├── CHANGELOG.md
 ├── keystore.properties.example
 ├── README.md                    # 英文
 └── README.zh.md                 # 中文（本文件）
@@ -220,7 +232,7 @@ Android 11+ 批量删除文件会走系统确认对话框。
 
 ### Gradle 使用错误 JDK
 
-安装 JDK 17 并设置 `JAVA_HOME`，或在**本机** `gradle.properties` 中配置 `org.gradle.java.home`（勿提交本机绝对路径）。
+安装 JDK 17+ 并设置 `JAVA_HOME`，或在**本机** `gradle.properties` 中配置 `org.gradle.java.home`（勿提交本机绝对路径）。
 
 ### adb 无设备
 

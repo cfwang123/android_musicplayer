@@ -12,6 +12,7 @@ import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.whj.music.R
 import com.whj.music.data.CoverArtLoader
+import com.whj.music.data.FolderPlaybackStore
 import com.whj.music.databinding.ItemSongBinding
 import com.whj.music.model.BrowseItem
 import com.whj.music.model.BrowseItemType
@@ -28,12 +29,15 @@ import kotlinx.coroutines.withContext
 class BrowseAdapter(
     private val onClick: (BrowseItem) -> Unit,
     private val onFavoriteClick: (BrowseItem) -> Unit,
-    private val onItemLongClick: (BrowseItem) -> Unit,
+    /** 长按：文件进多选；文件夹可出上下文菜单（anchor 用于 PopupMenu） */
+    private val onItemLongClick: (BrowseItem, View) -> Unit,
     private val onStartDrag: ((RecyclerView.ViewHolder) -> Unit)? = null,
 ) : ListAdapter<BrowseItem, BrowseAdapter.Holder>(Diff) {
 
     private var playingMediaId: Long? = null
     private var playingFolderPath: String = ""
+    /** 当前浏览目录上次播放的曲目（与正在播放可不同，用于进入目录时标记） */
+    private var lastPlayedMediaId: Long? = null
     private var favoriteKeys: Set<String> = emptySet()
     private var selectionMode: Boolean = false
     private var selectedKeys: Set<String> = emptySet()
@@ -47,6 +51,13 @@ class BrowseAdapter(
         playingMediaId = mediaId
         playingFolderPath = folderPath
         if (changed) notifyDataSetChanged()
+    }
+
+    /** 标记本目录上次播放曲目；null 清除。与 [setPlaying] 叠加时优先显示正在播放样式。 */
+    fun setLastPlayed(mediaId: Long?) {
+        if (lastPlayedMediaId == mediaId) return
+        lastPlayedMediaId = mediaId
+        notifyDataSetChanged()
     }
 
     fun setFavorites(keys: Set<String>) {
@@ -129,12 +140,21 @@ class BrowseAdapter(
                 BrowseItemType.FILE ->
                     playingMediaId != null && item.mediaId == playingMediaId
             }
+            // 上次播放曲目：仅绿点标记，不用「正在播放」底色
+            val isLastPlayed = !selectionMode &&
+                !isPlaying &&
+                item.type == BrowseItemType.FILE &&
+                lastPlayedMediaId != null &&
+                item.mediaId == lastPlayedMediaId
 
             // 彩色屏：淡色主题高亮；墨水屏：较深蓝灰底（能看出灰色即可）+ 深色字
             val mono = DisplayCompat.isNonColorScreen(ctx)
             val monoPlaying = isPlaying && mono
-            // 墨水屏不再用反色竖条，靠灰底区分即可
-            binding.playingBar.visibility = View.GONE
+            binding.playingBar.visibility = when {
+                mono -> View.GONE
+                isPlaying -> View.VISIBLE
+                else -> View.GONE
+            }
             binding.itemRoot.setBackgroundResource(
                 when {
                     selected -> R.drawable.bg_item_selected
@@ -198,8 +218,15 @@ class BrowseAdapter(
                         binding.artistText.visibility = View.VISIBLE
                         binding.artistText.text = sub
                     }
+                    // 有该目录播放记录：图标右上角绿色小点
+                    binding.historyBadge.visibility =
+                        if (FolderPlaybackStore.has(ctx, item.folderPath)) View.VISIBLE
+                        else View.GONE
                 }
                 BrowseItemType.FILE -> {
+                    // 进入目录未恢复播放时：上次曲目用绿色小点（非高亮底）
+                    binding.historyBadge.visibility =
+                        if (isLastPlayed) View.VISIBLE else View.GONE
                     binding.durationText.visibility = View.VISIBLE
                     binding.durationText.text = PlayableMedia.formatTime(item.durationMs)
                     // 第二行仅为占位「音频」时不显示
@@ -239,14 +266,9 @@ class BrowseAdapter(
 
             binding.root.setOnClickListener { onClick(item) }
             binding.root.setOnLongClickListener {
-                val canLong = item.type == BrowseItemType.FILE ||
-                    (item.type == BrowseItemType.FOLDER && foldersSelectable)
-                if (canLong) {
-                    onItemLongClick(item)
-                    true
-                } else {
-                    false
-                }
+                // 文件 / 文件夹均可长按，由 Activity 决定多选或上下文菜单
+                onItemLongClick(item, binding.root)
+                true
             }
         }
 

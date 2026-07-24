@@ -48,7 +48,7 @@ class KaraokeLineView @JvmOverloads constructor(
     }
 
     private fun applyStyle() {
-        val size = if (emphasize) sp(16f) else sp(14f)
+        val size = sp(14f)
         restPaint.textSize = size
         sungPaint.textSize = size
         restPaint.isFakeBoldText = emphasize

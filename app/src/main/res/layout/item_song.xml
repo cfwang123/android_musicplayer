@@ -29,20 +29,37 @@
         tools:visibility="visible" />
 
     <FrameLayout
-        android:id="@+id/coverFrame"
         android:layout_width="44dp"
-        android:layout_height="44dp"
-        android:background="@drawable/bg_cover"
-        android:clipToOutline="true">
+        android:layout_height="44dp">
 
-        <ImageView
-            android:id="@+id/iconView"
+        <FrameLayout
+            android:id="@+id/coverFrame"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:contentDescription="@null"
-            android:padding="0dp"
-            android:scaleType="fitCenter"
-            android:src="@drawable/ic_music_note" />
+            android:background="@drawable/bg_cover"
+            android:clipToOutline="true">
+
+            <ImageView
+                android:id="@+id/iconView"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:contentDescription="@null"
+                android:padding="0dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_music_note" />
+        </FrameLayout>
+
+        <!-- 有该目录播放记录时显示 -->
+        <View
+            android:id="@+id/historyBadge"
+            android:layout_width="8dp"
+            android:layout_height="8dp"
+            android:layout_gravity="top|end"
+            android:layout_marginTop="1dp"
+            android:layout_marginEnd="1dp"
+            android:background="@drawable/bg_history_dot"
+            android:visibility="gone"
+            tools:visibility="visible" />
     </FrameLayout>
 
     <LinearLayout

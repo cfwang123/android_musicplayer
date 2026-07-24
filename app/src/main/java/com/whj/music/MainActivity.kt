@@ -86,6 +86,21 @@ class MainActivity : AppCompatActivity() {
     private var pendingPlay: PlayableMedia? = null
     /** 文件夹恢复时的起始进度（配合 pendingPlay） */
     private var pendingFolderResumeMs: Int = 0
+    /**
+     * 长按菜单「恢复上次播放」：进入目录后强制恢复（可打断当前播放，不依赖设置开关）。
+     * 在 [maybeResumeFolderPlayback] 消费后清零。
+     */
+    private var forceFolderResumeOnLoad = false
+    /**
+     * 从「播放记录」点入的真实目录（normalize 后）。
+     * 在该目录（及其子目录向上回到该目录后）再后退时，回到播放记录列表。
+     */
+    private var historyEntryFolder: String? = null
+    /**
+     * 各目录列表滚动位置（离开时保存，回退时恢复）。
+     * value: firstVisiblePosition to topOffset
+     */
+    private val folderScrollPositions = mutableMapOf<String, Pair<Int, Int>>()
     private var currentPlayMode: PlayMode = PlayMode.REPEAT_FOLDER
     /** 系统删除确认对话框关联的文件（支持批量） */
     private var pendingDeleteItems: List<BrowseItem> = emptyList()
@@ -279,6 +294,8 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         // OnResume 算有活动，重置空闲自动关闭计时
         IdleAutoCloser.notifyUiActivity(this)
+        // 设置返回后：按最新「目标平均音量」重算当前曲增益
+        playerService?.reapplyVolumeNormalize()
         // 设置返回后的首帧之后再允许正常的「打开文件夹恢复播放」
         if (skipAutoResumeAfterSettings) {
             binding.root.post {
@@ -537,7 +554,7 @@ class MainActivity : AppCompatActivity() {
         browseAdapter = BrowseAdapter(
             onClick = { onBrowseItemClick(it) },
             onFavoriteClick = { onFavoriteToggle(it) },
-            onItemLongClick = { enterSelectionMode(it) },
+            onItemLongClick = { item, anchor -> onBrowseItemLongClick(item, anchor) },
             onStartDrag = { holder -> itemTouchHelper?.startDrag(holder) },
         )
         browse.songList.layoutManager = LinearLayoutManager(this)
@@ -921,6 +938,7 @@ class MainActivity : AppCompatActivity() {
         }
         popup.menu.add(0, MENU_PLAY_MODE, order++, getString(R.string.menu_play_mode, modeLabel(mode)))
         popup.menu.add(0, MENU_GOTO_FOLDER, order++, R.string.menu_goto_playing_file)
+        popup.menu.add(0, MENU_TRACK_DETAILS, order++, R.string.menu_track_details)
         val sleep = popup.menu.addSubMenu(0, MENU_SLEEP, order++, R.string.menu_sleep_timer)
         fillSleepMenu(sleep)
         popup.menu.add(0, MENU_SETTINGS, order++, R.string.menu_settings)
@@ -951,6 +969,10 @@ class MainActivity : AppCompatActivity() {
                     gotoPlayingFile()
                     true
                 }
+                item.itemId == MENU_TRACK_DETAILS -> {
+                    showTrackDetailsDialog()
+                    true
+                }
                 item.itemId == MENU_SETTINGS -> {
                     // 从设置返回时不自动恢复/抢播（主题 recreate 也不要）
                     skipAutoResumeAfterSettings = true
@@ -972,6 +994,94 @@ class MainActivity : AppCompatActivity() {
         }
         popup.show()
     }
+
+    /** 右上菜单：当前曲目详细信息（含平均音量 / 放大倍数） */
+    private fun showTrackDetailsDialog() {
+        val state = playerService?.currentState() ?: lastState
+        val item = state?.item
+        if (item == null) {
+            showToast(getString(R.string.track_details_none))
+            return
+        }
+        val norm = playerService?.volumeNormalizeInfo()
+            ?: MusicPlayerService.VolumeNormalizeInfo(
+                enabled = AppSettings.volumeNormalizeEnabled(this),
+                analyzing = false,
+                trackRms = null,
+                appliedGain = 1f,
+                targetRms = AppSettings.volumeTargetRms(this),
+            )
+        val durationMs = (state.durationMs.takeIf { it > 0 } ?: item.durationMs.toInt()).toLong()
+        val posMs = state.positionMs.coerceAtLeast(0).toLong()
+        val typeLabel = if (item.isVideo) {
+            getString(R.string.track_details_type_video)
+        } else {
+            getString(R.string.track_details_type_audio)
+        }
+        val folder = item.folderPath.ifBlank { state.folderPath }.ifBlank {
+            getString(R.string.track_details_na)
+        }
+        val file = item.filePath?.takeIf { it.isNotBlank() }
+            ?: getString(R.string.track_details_na)
+        val mediaId = if (item.id != 0L) item.id.toString() else getString(R.string.track_details_na)
+        val uri = item.uri.toString()
+        val listIndex = if (state.currentIndex >= 0) state.currentIndex + 1 else 0
+        val listSize = state.playlistSize
+        val speed = formatSpeedLabel(state.playbackSpeed)
+        val normOnOff = if (norm.enabled) {
+            getString(R.string.track_details_on)
+        } else {
+            getString(R.string.track_details_off)
+        }
+        val targetLabel = getString(R.string.settings_volume_target_fmt, norm.targetRms)
+        val rmsLabel = when {
+            norm.analyzing && norm.trackRms == null ->
+                getString(R.string.track_details_analyzing)
+            norm.trackRms != null -> {
+                val rms = norm.trackRms
+                getString(
+                    R.string.track_details_rms_fmt,
+                    rms,
+                    com.whj.music.player.VolumeLoudnessAnalyzer.rmsToDbFs(rms),
+                )
+            }
+            else -> getString(R.string.track_details_unknown)
+        }
+        val gainLabel = if (norm.analyzing && norm.trackRms == null) {
+            getString(R.string.track_details_analyzing)
+        } else {
+            val g = norm.appliedGain
+            val db = com.whj.music.player.VolumeLoudnessAnalyzer.gainToDb(g)
+            val dbStr = if (db >= 0f) "+%.1f".format(db) else "%.1f".format(db)
+            getString(R.string.track_details_gain_fmt, g, dbStr)
+        }
+        val body = getString(
+            R.string.track_details_body,
+            item.title,
+            item.subtitle.ifBlank { getString(R.string.track_details_na) },
+            PlayableMedia.formatTime(durationMs),
+            PlayableMedia.formatTime(posMs),
+            typeLabel,
+            folder,
+            file,
+            mediaId,
+            uri,
+            listIndex,
+            listSize,
+            speed,
+            normOnOff,
+            targetLabel,
+            rmsLabel,
+            gainLabel,
+        )
+        AlertDialog.Builder(this)
+            .setTitle(R.string.track_details_title)
+            .setMessage(body)
+            .setPositiveButton(android.R.string.ok, null)
+            .show()
+    }
+
+
 
     /** 强制全量重扫 MediaStore 目录树缓存 */
     private fun rescanMediaFiles() {
@@ -1415,7 +1525,23 @@ class MainActivity : AppCompatActivity() {
             return
         }
         when (item.type) {
-            BrowseItemType.FOLDER -> loadFolder(item.folderPath)
+            BrowseItemType.FOLDER -> {
+                val target = FolderBrowser.normalizeFolder(item.folderPath)
+                // 播放记录列表 → 真实目录：标记入口，后退回到播放记录
+                if (PlaylistPaths.isHistory(currentFolder) &&
+                    !PlaylistPaths.isInPlaylistSpace(target)
+                ) {
+                    historyEntryFolder = target
+                    loadFolder(target)
+                    return
+                }
+                // 离开「从播放记录进入」的子树时清除返回标记
+                val entry = historyEntryFolder
+                if (entry != null && target != entry && !isFolderUnder(target, entry)) {
+                    historyEntryFolder = null
+                }
+                loadFolder(target)
+            }
             BrowseItemType.FILE -> {
                 val playable = item.toPlayable() ?: return
                 playableInFolder = currentItems.mapNotNull { it.toPlayable() }
@@ -1426,6 +1552,57 @@ class MainActivity : AppCompatActivity() {
                 // 1 屏选歌后停留在列表，不跳转到播放页
             }
         }
+    }
+
+    /** [child] 是否为 [ancestor] 的子路径（不含自身） */
+    private fun isFolderUnder(child: String, ancestor: String): Boolean {
+        val c = FolderBrowser.normalizeFolder(child)
+        val a = FolderBrowser.normalizeFolder(ancestor)
+        if (a.isEmpty() || c == a) return false
+        return c.startsWith(a.trimEnd('/') + "/")
+    }
+
+    private fun onBrowseItemLongClick(item: BrowseItem, anchor: View) {
+        if (selectionMode) {
+            if (isItemSelectable(item)) toggleSelection(item)
+            return
+        }
+        when (item.type) {
+            BrowseItemType.FILE -> enterSelectionMode(item)
+            BrowseItemType.FOLDER -> {
+                // 播放列表总览：用户列表仍走多选删除
+                if (isItemSelectable(item)) {
+                    enterSelectionMode(item)
+                    return
+                }
+                showFolderContextMenu(anchor, item)
+            }
+        }
+    }
+
+    /** 普通文件夹长按：有播放记录时提供「恢复上次播放」 */
+    private fun showFolderContextMenu(anchor: View, item: BrowseItem) {
+        if (item.type != BrowseItemType.FOLDER) return
+        val path = FolderBrowser.normalizeFolder(item.folderPath)
+        if (path.isEmpty() || PlaylistPaths.isInPlaylistSpace(path)) return
+        if (!FolderPlaybackStore.has(this, path)) return
+        val popup = PopupMenu(this, anchor)
+        popup.menu.add(0, MENU_FOLDER_RESUME, 0, R.string.menu_folder_resume)
+        popup.setOnMenuItemClickListener { menuItem ->
+            when (menuItem.itemId) {
+                MENU_FOLDER_RESUME -> {
+                    // 在播放记录列表内长按恢复：仍记入口，便于后退
+                    if (PlaylistPaths.isHistory(currentFolder)) {
+                        historyEntryFolder = path
+                    }
+                    forceFolderResumeOnLoad = true
+                    loadFolder(path, resumePlayback = true)
+                    true
+                }
+                else -> false
+            }
+        }
+        popup.show()
     }
 
     // region 多选与播放列表
@@ -1759,6 +1936,14 @@ class MainActivity : AppCompatActivity() {
             directFileCount = favCount,
             subtitle = getString(R.string.folder_song_count, favCount),
         )
+        val historyCount = FolderPlaybackStore.listAll(this).size
+        val history = BrowseItem(
+            type = BrowseItemType.FOLDER,
+            name = getString(R.string.playback_history),
+            folderPath = PlaylistPaths.historyPath(),
+            directFileCount = historyCount,
+            subtitle = getString(R.string.folder_song_count, historyCount),
+        )
         val lists = PlaylistStore.list(this).map { pl ->
             BrowseItem(
                 type = BrowseItemType.FOLDER,
@@ -1768,7 +1953,40 @@ class MainActivity : AppCompatActivity() {
                 subtitle = getString(R.string.folder_song_count, pl.tracks.size),
             )
         }
-        return listOf(favorites) + lists
+        return listOf(favorites, history) + lists
+    }
+
+    /** 「播放记录」：有记录的真实文件夹，按上次播放时间降序 */
+    private fun listHistoryFoldersAsBrowseItems(): List<BrowseItem> {
+        return FolderPlaybackStore.listAll(this).map { entry ->
+            val name = entry.folderPath.trim('/').substringAfterLast('/')
+                .ifBlank { entry.folderPath.ifBlank { "/" } }
+            val time = formatHistoryTime(entry.updatedAtMs)
+            val sub = buildString {
+                append(entry.mediaTitle)
+                if (time.isNotEmpty()) {
+                    append(" · ")
+                    append(time)
+                }
+            }
+            BrowseItem(
+                type = BrowseItemType.FOLDER,
+                name = name,
+                folderPath = entry.folderPath,
+                subtitle = sub,
+                directFileCount = 0,
+            )
+        }
+    }
+
+    private fun formatHistoryTime(ms: Long): String {
+        if (ms <= 0L) return ""
+        return android.text.format.DateUtils.getRelativeTimeSpanString(
+            ms,
+            System.currentTimeMillis(),
+            android.text.format.DateUtils.MINUTE_IN_MILLIS,
+            android.text.format.DateUtils.FORMAT_ABBREV_RELATIVE,
+        ).toString()
     }
 
     private fun listPlaylistTracks(playlistId: String): List<BrowseItem> {
@@ -1814,18 +2032,39 @@ class MainActivity : AppCompatActivity() {
             exitSelectionMode()
             return true
         }
+        // 从「播放记录」点入的真实目录：在入口层后退回到播放记录
+        val historyEntry = historyEntryFolder
+        if (historyEntry != null) {
+            val cur = FolderBrowser.normalizeFolder(currentFolder)
+            if (cur == historyEntry) {
+                historyEntryFolder = null
+                loadFolder(PlaylistPaths.historyPath(), resumePlayback = false)
+                return true
+            }
+        }
         // 播放列表虚拟路径
+        // 返回上一级不恢复播放；仅点击进入目录时才恢复
         if (PlaylistPaths.isPlaylistsRoot(currentFolder)) {
-            loadFolder("")
+            historyEntryFolder = null
+            loadFolder("", resumePlayback = false)
             return true
         }
         val plId = PlaylistPaths.playlistIdOf(currentFolder)
         if (plId != null) {
-            loadFolder(PlaylistPaths.ROOT)
+            historyEntryFolder = null
+            loadFolder(PlaylistPaths.ROOT, resumePlayback = false)
             return true
         }
         val parent = FolderBrowser.parentFolder(currentFolder) ?: return false
-        loadFolder(parent)
+        // 若上一层已不在「播放记录入口」子树内，清除标记
+        val entry = historyEntryFolder
+        if (entry != null) {
+            val p = FolderBrowser.normalizeFolder(parent)
+            if (p != entry && !isFolderUnder(p, entry)) {
+                historyEntryFolder = null
+            }
+        }
+        loadFolder(parent, resumePlayback = false)
         return true
     }
 
@@ -1843,6 +2082,11 @@ class MainActivity : AppCompatActivity() {
     ) {
         if (selectionMode) exitSelectionMode()
         val targetFolder = FolderBrowser.normalizeFolder(folderPath)
+        // 离开当前目录前保存滚动，便于回退时还原
+        val leaving = FolderBrowser.normalizeFolder(currentFolder)
+        if (leaving != targetFolder && ::browse.isInitialized) {
+            saveBrowseScrollPosition(leaving)
+        }
         currentFolder = targetFolder
         browse.emptyState.visibility = View.GONE
         browse.permissionBtn.visibility = View.GONE
@@ -1854,6 +2098,8 @@ class MainActivity : AppCompatActivity() {
         val isMediaBrowse = !isPlaylistSpace
         // 从设置返回期间禁止「打开文件夹自动恢复播放」
         val allowResume = resumePlayback && !skipAutoResumeAfterSettings
+        // 回退/非进入恢复：还原离开时的滚动位置
+        val restoreScroll = scrollToMediaId == null && !allowResume
 
         // 1) 内存缓存：主线程立刻切换（无 MediaStore 查询）
         var shownFromCache = false
@@ -1873,6 +2119,7 @@ class MainActivity : AppCompatActivity() {
                     roots = roots,
                     scrollToMediaId = scrollToMediaId,
                     resumePlayback = allowResume && scrollToMediaId == null,
+                    restoreScroll = restoreScroll,
                 )
                 shownFromCache = true
                 browse.loadingBar.visibility = View.GONE
@@ -1913,6 +2160,7 @@ class MainActivity : AppCompatActivity() {
                             roots = roots,
                             scrollToMediaId = scrollToMediaId,
                             resumePlayback = allowResume && scrollToMediaId == null,
+                            restoreScroll = restoreScroll,
                         )
                         fromCache = true
                         browse.loadingBar.visibility = View.GONE
@@ -1928,6 +2176,9 @@ class MainActivity : AppCompatActivity() {
                     }
                     PlaylistPaths.isFavorites(loadFolderSnapshot) -> {
                         resultItems = listFavoriteTracks()
+                    }
+                    PlaylistPaths.isHistory(loadFolderSnapshot) -> {
+                        resultItems = listHistoryFoldersAsBrowseItems()
                     }
                     PlaylistPaths.isUserPlaylist(loadFolderSnapshot) -> {
                         resultItems = listPlaylistTracks(
@@ -1969,6 +2220,8 @@ class MainActivity : AppCompatActivity() {
                         scrollToMediaId = scrollToMediaId,
                         // 已从缓存展示并可能已触发恢复时，避免二次抢播
                         resumePlayback = allowResume && scrollToMediaId == null && !fromCache,
+                        // 二次刷新仍保持回退时的滚动
+                        restoreScroll = restoreScroll,
                     )
                 }
             } catch (e: Exception) {
@@ -1994,13 +2247,15 @@ class MainActivity : AppCompatActivity() {
         roots: List<String>,
         scrollToMediaId: Long?,
         resumePlayback: Boolean,
+        restoreScroll: Boolean = false,
     ) {
         currentItems = items
         playableInFolder = items.mapNotNull { it.toPlayable() }
         browseAdapter.submitList(null)
         browseAdapter.submitList(items.toList()) {
-            if (scrollToMediaId != null) {
-                scrollBrowseToMedia(scrollToMediaId)
+            when {
+                scrollToMediaId != null -> scrollBrowseToMedia(scrollToMediaId)
+                restoreScroll -> restoreBrowseScrollPosition(currentFolder)
             }
         }
         val folderCount = items.count { it.type == BrowseItemType.FOLDER }
@@ -2012,6 +2267,8 @@ class MainActivity : AppCompatActivity() {
                     getString(R.string.playlists_empty)
                 PlaylistPaths.isFavorites(currentFolder) ->
                     getString(R.string.favorites_empty)
+                PlaylistPaths.isHistory(currentFolder) ->
+                    getString(R.string.playback_history_empty)
                 currentFolder.isEmpty() -> {
                     if (roots.isNotEmpty()) {
                         getString(R.string.settings_roots_empty)
@@ -2029,46 +2286,104 @@ class MainActivity : AppCompatActivity() {
         }
         lastState?.let { applyPlayingHighlight(it) }
         updateSelectionUi()
-        if (resumePlayback && !PlaylistPaths.isPlaylistsRoot(currentFolder)) {
+        val canFolderHistory = !PlaylistPaths.isPlaylistsRoot(currentFolder) &&
+            !PlaylistPaths.isHistory(currentFolder) &&
+            !PlaylistPaths.isInPlaylistSpace(currentFolder)
+        if (resumePlayback && canFolderHistory) {
             maybeResumeFolderPlayback()
+        } else if (canFolderHistory) {
+            // 回退上一级等：不抢播、不改滚动，仅绿点标记上次曲目
+            markLastPlayedInFolder()
+        } else {
+            browseAdapter.setLastPlayed(null)
         }
     }
 
+    private fun saveBrowseScrollPosition(folderPath: String) {
+        if (!::browse.isInitialized) return
+        val lm = browse.songList.layoutManager as? LinearLayoutManager ?: return
+        val pos = lm.findFirstVisibleItemPosition()
+        if (pos == RecyclerView.NO_POSITION) return
+        val child = lm.findViewByPosition(pos)
+        val offset = child?.top ?: 0
+        folderScrollPositions[FolderBrowser.normalizeFolder(folderPath)] = pos to offset
+    }
+
+    private fun restoreBrowseScrollPosition(folderPath: String) {
+        if (!::browse.isInitialized) return
+        val saved = folderScrollPositions[FolderBrowser.normalizeFolder(folderPath)] ?: return
+        val lm = browse.songList.layoutManager as? LinearLayoutManager ?: return
+        lm.scrollToPositionWithOffset(saved.first, saved.second)
+    }
+
+    /** 仅绿点标记本目录上次曲目，不滚动、不恢复播放 */
+    private fun markLastPlayedInFolder() {
+        if (!::browseAdapter.isInitialized) return
+        if (currentFolder.isEmpty() || PlaylistPaths.isInPlaylistSpace(currentFolder)) {
+            browseAdapter.setLastPlayed(null)
+            return
+        }
+        val snap = FolderPlaybackStore.load(this, currentFolder)
+        if (snap == null) {
+            browseAdapter.setLastPlayed(null)
+            return
+        }
+        val inList = playableInFolder.firstOrNull {
+            it.id == snap.media.id || it.uri == snap.media.uri
+        }
+        val targetId = (inList ?: snap.media).id
+        browseAdapter.setLastPlayed(targetId)
+    }
+
     /**
-     * 打开文件夹后：滚动到上次曲目；若当前未在播放，则自动恢复播放与进度。
+     * 点击进入文件夹后：
+     * - 有记录则滚动定位，并 UI 标记上次曲目
+     * - 当前**正在播放**时不抢播（仅定位+标记）
+     * - 未在播放且设置开启时自动恢复；长按菜单 force 可打断当前播放
+     * 返回上一级时 [loadFolder] 传入 resumePlayback=false，仅 [markLastPlayedInFolder]。
      */
     private fun maybeResumeFolderPlayback() {
-        if (skipAutoResumeAfterSettings) return
-        if (!AppSettings.resumeFolderOnOpen(this)) return
-        if (currentFolder.isEmpty()) return
-        // 启动全局恢复尚未完成时，不抢播
-        if (AppSettings.resumeOnStart(this) && !restoreAttempted) return
-        if (pendingRestore != null) return
-        val snap = FolderPlaybackStore.load(this, currentFolder) ?: return
-        // 列表中定位
+        val force = forceFolderResumeOnLoad
+        forceFolderResumeOnLoad = false
+        if (currentFolder.isEmpty()) {
+            browseAdapter.setLastPlayed(null)
+            return
+        }
+        if (!force && skipAutoResumeAfterSettings) {
+            markLastPlayedInFolder()
+            return
+        }
+
+        val snap = FolderPlaybackStore.load(this, currentFolder)
+        if (snap == null) {
+            browseAdapter.setLastPlayed(null)
+            // 无记录时仍可走强制无效；自动恢复也直接结束
+            return
+        }
+
+        // 列表中定位 + 标记上次曲目（无论是否正在播放）
         val inList = playableInFolder.firstOrNull {
             it.id == snap.media.id || it.uri == snap.media.uri
         }
         val target = inList ?: snap.media
-        if (inList != null || playableInFolder.none { it.id == target.id }) {
-            // 保证列表含目标
-            if (inList == null) {
-                playableInFolder = listOf(target) + playableInFolder
-            }
+        if (inList == null && playableInFolder.none { it.id == target.id }) {
+            playableInFolder = listOf(target) + playableInFolder
         }
+        browseAdapter.setLastPlayed(target.id)
         scrollBrowseToMedia(target.id)
 
-        val state = playerService?.currentState() ?: lastState
-        // 正在播放其它内容时不打断，只定位列表
-        if (state?.isPlaying == true) {
-            val playingFolder = FolderBrowser.normalizeFolder(state.folderPath)
-            if (playingFolder != currentFolder) {
-                return
-            }
-            // 同文件夹已在播：只滚动
-            return
+        // 是否自动起播
+        if (!force) {
+            if (!AppSettings.resumeFolderOnOpen(this)) return
+            // 启动全局恢复尚未完成时，不抢播
+            if (AppSettings.resumeOnStart(this) && !restoreAttempted) return
+            if (pendingRestore != null) return
+            val state = playerService?.currentState() ?: lastState
+            // 正在播放：只定位+标记，不恢复本目录播放
+            if (state?.isPlaying == true) return
         }
-        // 未播放 → 恢复该文件夹上次进度并开始播放
+
+        // 未播放，或长按强制恢复 → 按该文件夹上次进度起播
         MusicPlayerService.start(this)
         ensureBound()
         val list = if (playableInFolder.any { it.id == target.id || it.uri == target.uri }) {
@@ -2086,7 +2401,6 @@ class MainActivity : AppCompatActivity() {
                 startPositionMs = snap.positionMs,
                 autoPlay = true,
             )
-            showToast(getString(R.string.folder_resume_toast, target.title))
         } else {
             // 服务尚未绑定：记入 pending，连上后再播
             pendingPlay = target
@@ -2115,6 +2429,11 @@ class MainActivity : AppCompatActivity() {
             }
             PlaylistPaths.isFavorites(currentFolder) -> {
                 val name = getString(R.string.favorites_songs)
+                browse.titleText.text = name
+                browse.pathText.text = getString(R.string.playlists_title) + " / " + name
+            }
+            PlaylistPaths.isHistory(currentFolder) -> {
+                val name = getString(R.string.playback_history)
                 browse.titleText.text = name
                 browse.pathText.text = getString(R.string.playlists_title) + " / " + name
             }
@@ -2455,6 +2774,8 @@ class MainActivity : AppCompatActivity() {
         private const val MENU_SPEED_BASE = 2000
         private const val MENU_NEW_PLAYLIST = 7
         private const val MENU_RESCAN = 8
+        private const val MENU_TRACK_DETAILS = 9
+        private const val MENU_FOLDER_RESUME = 10
         private const val MENU_PLAYLIST_BASE = 3000
         private const val MENU_PLAYLIST_NEW = 3999
 

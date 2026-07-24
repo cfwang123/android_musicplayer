@@ -41,9 +41,11 @@ import com.whj.music.model.PlayableMedia
 import kotlin.random.Random
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MusicPlayerService : Service() {
     private val binder = LocalBinder()
@@ -70,12 +72,16 @@ class MusicPlayerService : Service() {
     private lateinit var folderBrowser: FolderBrowser
     private lateinit var audioManager: AudioManager
     private lateinit var equalizerController: EqualizerController
+    private lateinit var volumeNormalizeController: VolumeNormalizeController
+    private var volumeNormJob: Job? = null
+    /** 当前曲分析得到的平均 RMS；null 表示未知或未启用 */
+    private var currentTrackRms: Float? = null
+    /** 是否正在后台分析平均音量 */
+    private var volumeNormAnalyzing: Boolean = false
     private var audioFocusRequest: AudioFocusRequest? = null
     private var hasAudioFocus = false
     /** 因短暂音频焦点丢失（导航等）而暂停，焦点恢复后自动续播 */
     private var pausedByTransientFocus = false
-    /** 随机模式：上一曲历史（列表下标，最近在末尾） */
-    private val playHistory = ArrayDeque<Int>()
     private var noisyReceiverRegistered = false
     /** 锁屏 / 通知栏 / 蓝牙线控 */
     private var mediaSession: MediaSessionCompat? = null
@@ -132,21 +138,15 @@ class MusicPlayerService : Service() {
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK,
             -> {
                 // 导航/通知等短暂占用：暂停，焦点回来后继续
-                try {
-                    mediaPlayer?.setVolume(1f, 1f)
-                } catch (_: Exception) {
-                    // ignore
-                }
                 if (isPlaying()) {
                     pausedByTransientFocus = true
                     pauseInternal(updateFocus = false)
                 }
             }
             AudioManager.AUDIOFOCUS_GAIN -> {
-                try {
-                    mediaPlayer?.setVolume(1f, 1f)
-                } catch (_: Exception) {
-                    // ignore
+                // 恢复归一化后的音量（勿强制 1.0）
+                if (::volumeNormalizeController.isInitialized) {
+                    volumeNormalizeController.reapplyPlayerVolume(mediaPlayer)
                 }
                 if (pausedByTransientFocus) {
                     pausedByTransientFocus = false
@@ -165,6 +165,7 @@ class MusicPlayerService : Service() {
         folderBrowser = FolderBrowser(this)
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         equalizerController = EqualizerController(this)
+        volumeNormalizeController = VolumeNormalizeController(this)
         playMode = AppSettings.defaultPlayMode(this)
         PlayModeStore.save(this, playMode)
         playbackSpeed = AppSettings.defaultPlaybackSpeed(this)
@@ -280,10 +281,12 @@ class MusicPlayerService : Service() {
     fun getPlayMode(): PlayMode = playMode
 
     fun setPlayMode(mode: PlayMode) {
+        val wasShuffle = playMode == PlayMode.SHUFFLE
         playMode = mode
         PlayModeStore.save(this, mode)
-        if (mode != PlayMode.SHUFFLE) {
-            playHistory.clear()
+        // 重新进入随机：对当前列表做一次乱序；之后上/下一首按该顺序
+        if (mode == PlayMode.SHUFFLE && !wasShuffle) {
+            reshufflePlaylistKeepCurrent()
         }
         notifyState()
     }
@@ -292,6 +295,29 @@ class MusicPlayerService : Service() {
         val next = playMode.next()
         setPlayMode(next)
         return next
+    }
+
+    /**
+     * 随机模式：打乱 [playlist] 顺序，保持当前曲目下标正确。
+     * 仅在进入 SHUFFLE 或载入新列表且已是 SHUFFLE 时调用。
+     */
+    private fun reshufflePlaylistKeepCurrent() {
+        if (playlist.size <= 1) return
+        val current = playlist.getOrNull(currentIndex)
+        playlist.shuffle(Random.Default)
+        if (current != null) {
+            currentIndex = indexOfInPlaylist(current).takeIf { it >= 0 } ?: 0
+        }
+    }
+
+    private fun indexOfInPlaylist(item: PlayableMedia): Int {
+        return playlist.indexOfFirst { it.id == item.id && it.uri == item.uri }
+            .takeIf { it >= 0 }
+            ?: playlist.indexOfFirst { it.uri == item.uri }.takeIf { it >= 0 }
+            ?: playlist.indexOfFirst {
+                !item.filePath.isNullOrBlank() && it.filePath == item.filePath
+            }.takeIf { it >= 0 }
+            ?: playlist.indexOfFirst { it.id == item.id && item.id != 0L }
     }
 
     /** 启动定时关闭，单位分钟；到时暂停并清空定时 */
@@ -350,14 +376,19 @@ class MusicPlayerService : Service() {
         }
         playlist.clear()
         playlist.addAll(items)
-        playHistory.clear()
         if (playlist.isEmpty()) {
             currentIndex = -1
             releasePlayer(invalidateSession = true)
             notifyState()
             return
         }
-        val index = startIndex.coerceIn(0, playlist.lastIndex)
+        var index = startIndex.coerceIn(0, playlist.lastIndex)
+        // 已在随机模式时载入新目录列表：按一次乱序建立播放顺序
+        if (playMode == PlayMode.SHUFFLE && playlist.size > 1) {
+            val startItem = playlist[index]
+            playlist.shuffle(Random.Default)
+            index = indexOfInPlaylist(startItem).takeIf { it >= 0 } ?: 0
+        }
         playAt(index, startPositionMs = startPositionMs, autoPlay = autoPlay)
     }
 
@@ -439,7 +470,6 @@ class MusicPlayerService : Service() {
         saveCurrentPlayback()
         sleepDeadlineElapsed = 0L
         pausedByTransientFocus = false
-        playHistory.clear()
         releasePlayer(invalidateSession = true)
         playlist.clear()
         currentIndex = -1
@@ -454,7 +484,8 @@ class MusicPlayerService : Service() {
     fun playNext() {
         if (playlist.isEmpty()) return
         when (playMode) {
-            PlayMode.REPEAT_ONE, PlayMode.REPEAT_FOLDER -> {
+            // 随机 = 已打乱的列表顺序前进（与文件夹循环相同）
+            PlayMode.REPEAT_ONE, PlayMode.REPEAT_FOLDER, PlayMode.SHUFFLE -> {
                 val next = if (currentIndex + 1 < playlist.size) currentIndex + 1 else 0
                 if (playlist.size == 1 && next == currentIndex) {
                     restartCurrent()
@@ -469,17 +500,11 @@ class MusicPlayerService : Service() {
                     loadAdjacentFolder(forward = true)
                 }
             }
-            PlayMode.SHUFFLE -> playNextShuffle()
         }
     }
 
     fun playPrevious() {
         if (playlist.isEmpty()) return
-        // 随机模式：上一曲 = 播放历史，不按列表顺序
-        if (playMode == PlayMode.SHUFFLE) {
-            playPreviousShuffle()
-            return
-        }
         val player = mediaPlayer
         try {
             if (player != null && player.currentPosition > 3000) {
@@ -491,7 +516,7 @@ class MusicPlayerService : Service() {
             // fall through
         }
         when (playMode) {
-            PlayMode.REPEAT_ONE, PlayMode.REPEAT_FOLDER -> {
+            PlayMode.REPEAT_ONE, PlayMode.REPEAT_FOLDER, PlayMode.SHUFFLE -> {
                 val prev = if (currentIndex - 1 >= 0) currentIndex - 1 else playlist.lastIndex
                 playAt(prev)
             }
@@ -502,59 +527,6 @@ class MusicPlayerService : Service() {
                     loadAdjacentFolder(forward = false, playLast = true)
                 }
             }
-            PlayMode.SHUFFLE -> playPreviousShuffle()
-        }
-    }
-
-    private fun playNextShuffle() {
-        if (playlist.size <= 1) {
-            restartCurrent()
-            return
-        }
-        if (currentIndex in playlist.indices) {
-            pushHistory(currentIndex)
-        }
-        var next = Random.nextInt(playlist.size)
-        // 尽量不连播同一首
-        var guard = 0
-        while (next == currentIndex && guard < 8) {
-            next = Random.nextInt(playlist.size)
-            guard++
-        }
-        playAt(next)
-    }
-
-    private fun playPreviousShuffle() {
-        val player = mediaPlayer
-        try {
-            if (player != null && player.currentPosition > 3000) {
-                player.seekTo(0)
-                notifyState()
-                return
-            }
-        } catch (_: Exception) {
-            // fall through
-        }
-        val prev = playHistory.removeLastOrNull()
-        if (prev != null && prev in playlist.indices) {
-            playAt(prev)
-        } else {
-            try {
-                mediaPlayer?.seekTo(0)
-                notifyState()
-            } catch (_: Exception) {
-                // ignore
-            }
-        }
-    }
-
-    private fun pushHistory(index: Int) {
-        if (index !in playlist.indices) return
-        // 连续相同下标不重复入栈
-        if (playHistory.lastOrNull() == index) return
-        playHistory.addLast(index)
-        while (playHistory.size > MAX_PLAY_HISTORY) {
-            playHistory.removeFirst()
         }
     }
 
@@ -602,6 +574,31 @@ class MusicPlayerService : Service() {
     fun getPlaylist(): List<PlayableMedia> = playlist.toList()
 
     fun getCurrentIndex(): Int = currentIndex
+
+    /** 当前曲目音量归一化信息（详细信息对话框用） */
+    fun volumeNormalizeInfo(): VolumeNormalizeInfo {
+        val enabled = AppSettings.volumeNormalizeEnabled(this)
+        val target = AppSettings.volumeTargetRms(this)
+        val gain = if (::volumeNormalizeController.isInitialized) {
+            volumeNormalizeController.appliedGain
+        } else {
+            1f
+        }
+        return VolumeNormalizeInfo(
+            enabled = enabled,
+            analyzing = volumeNormAnalyzing,
+            trackRms = currentTrackRms,
+            appliedGain = if (enabled) gain else 1f,
+            targetRms = target,
+        )
+    }
+
+    /** 设置变更后重算当前曲增益（沿用已缓存 RMS） */
+    fun reapplyVolumeNormalize() {
+        val item = playlist.getOrNull(currentIndex) ?: return
+        val player = mediaPlayer ?: return
+        scheduleVolumeNormalize(playSession, item, player)
+    }
 
     fun currentState(): PlaybackState {
         val item = playlist.getOrNull(currentIndex)
@@ -667,7 +664,8 @@ class MusicPlayerService : Service() {
     private fun onTrackCompleted() {
         when (playMode) {
             PlayMode.REPEAT_ONE -> restartCurrent()
-            PlayMode.REPEAT_FOLDER -> {
+            // 随机按打乱后的顺序循环
+            PlayMode.REPEAT_FOLDER, PlayMode.SHUFFLE -> {
                 val next = if (currentIndex + 1 < playlist.size) currentIndex + 1 else 0
                 if (playlist.size == 1) {
                     restartCurrent()
@@ -682,7 +680,6 @@ class MusicPlayerService : Service() {
                     loadAdjacentFolder(forward = true)
                 }
             }
-            PlayMode.SHUFFLE -> playNextShuffle()
         }
     }
 
@@ -840,6 +837,9 @@ class MusicPlayerService : Service() {
                     applyPlaybackSpeed()
                     // 绑定均衡器（默认关闭，仅启用时改音色）
                     attachEqualizer(mp.audioSessionId)
+                    // 音量归一化：先中性，后台分析后缩放
+                    volumeNormalizeController.attach(mp.audioSessionId)
+                    scheduleVolumeNormalize(session, item, mp)
                     trackStartedElapsed = 0L
                     if (autoPlayOnPrepared) {
                         if (!hasAudioFocus && !requestAudioFocus()) {
@@ -951,12 +951,75 @@ class MusicPlayerService : Service() {
         equalizerController.attach(audioSessionId)
     }
 
+    /**
+     * 若开启「自动统一音量」：读取/计算曲目平均 RMS，缩放到目标响度。
+     * 有缓存时几乎立刻应用；无缓存时后台解码，完成后生效。
+     */
+    private fun scheduleVolumeNormalize(
+        session: Int,
+        item: PlayableMedia,
+        player: MediaPlayer,
+    ) {
+        volumeNormJob?.cancel()
+        volumeNormAnalyzing = false
+        if (!AppSettings.volumeNormalizeEnabled(this)) {
+            currentTrackRms = VolumeNormalizeController.getCachedRms(this, item.id)
+            volumeNormalizeController.applyNeutral(player)
+            return
+        }
+        val mediaId = item.id
+        val targetRms = AppSettings.volumeTargetRms(this)
+        val cached = VolumeNormalizeController.getCachedRms(this, mediaId)
+        if (cached != null) {
+            currentTrackRms = cached
+            val gain = VolumeLoudnessAnalyzer.gainForRms(cached, targetRms)
+            volumeNormalizeController.applyGain(player, gain)
+            Log.i(
+                TAG,
+                "volume norm cached rms=$cached target=$targetRms gain=$gain title=${item.title}",
+            )
+            return
+        }
+        // 先按原音量播，分析完再调
+        currentTrackRms = null
+        volumeNormalizeController.applyNeutral(player)
+        volumeNormAnalyzing = true
+        val appCtx = applicationContext
+        val uri = item.uri
+        volumeNormJob = serviceScope.launch {
+            val rms = withContext(Dispatchers.IO) {
+                VolumeLoudnessAnalyzer.analyzeRms(appCtx, uri)
+            }
+            if (session != playSession) return@launch
+            volumeNormAnalyzing = false
+            if (rms == null) {
+                Log.w(TAG, "volume norm analyze failed title=${item.title}")
+                currentTrackRms = null
+                volumeNormalizeController.applyNeutral(mediaPlayer)
+                return@launch
+            }
+            VolumeNormalizeController.putCachedRms(appCtx, mediaId, rms)
+            currentTrackRms = rms
+            val target = AppSettings.volumeTargetRms(this@MusicPlayerService)
+            val gain = VolumeLoudnessAnalyzer.gainForRms(rms, target)
+            volumeNormalizeController.applyGain(mediaPlayer, gain)
+            Log.i(TAG, "volume norm rms=$rms target=$target gain=$gain title=${item.title}")
+        }
+    }
+
     private fun releasePlayer(invalidateSession: Boolean) {
         if (invalidateSession) {
             playSession++
         }
+        volumeNormJob?.cancel()
+        volumeNormJob = null
+        volumeNormAnalyzing = false
+        currentTrackRms = null
         stopProgressUpdates()
         equalizerController.release()
+        if (::volumeNormalizeController.isInitialized) {
+            volumeNormalizeController.release()
+        }
         val player = mediaPlayer
         mediaPlayer = null
         if (player != null) {
@@ -1298,6 +1361,15 @@ class MusicPlayerService : Service() {
         val playbackSpeed: Float = 1.0f,
     )
 
+    /** 音量归一化快照（详细信息） */
+    data class VolumeNormalizeInfo(
+        val enabled: Boolean,
+        val analyzing: Boolean,
+        val trackRms: Float?,
+        val appliedGain: Float,
+        val targetRms: Float,
+    )
+
     companion object {
         private const val TAG = "MusicPlayerService"
         const val ACTION_PLAY_PAUSE = "com.whj.music.action.PLAY_PAUSE"
@@ -1317,7 +1389,6 @@ class MusicPlayerService : Service() {
         private const val INTERVAL_BACKGROUND_IDLE_MS = 2000L
         /** 锁屏进度刷新 */
         private const val SESSION_POS_INTERVAL_MS = 2000L
-        private const val MAX_PLAY_HISTORY = 100
 
         /** 启动为前台服务，解绑 Activity 后仍可继续播放 */
         fun start(context: Context) {

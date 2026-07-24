@@ -5,6 +5,10 @@ import com.whj.music.model.PlayMode
 
 /** 应用参数设置（设置界面读写） */
 object AppSettings {
+    const val DEFAULT_VOLUME_TARGET_RMS = 0.12f
+    const val MIN_VOLUME_TARGET_RMS = 0f
+    const val MAX_VOLUME_TARGET_RMS = 0.21f
+
     private const val PREFS = "music_player_prefs"
 
     private const val KEY_AUTO_LOCATE = "set_auto_locate"
@@ -19,6 +23,10 @@ object AppSettings {
     private const val KEY_EQ_ENABLED = "set_eq_enabled"
     private const val KEY_EQ_PRESET = "set_eq_preset"
     private const val KEY_EQ_BANDS = "set_eq_bands"
+    /** 自动统一音量（按曲目平均 RMS 归一化） */
+    private const val KEY_VOLUME_NORMALIZE = "set_volume_normalize"
+    /** 目标平均 RMS（0~1 full-scale），默认 0.12 */
+    private const val KEY_VOLUME_TARGET_RMS = "set_volume_target_rms"
     /** system / zh / en */
     private const val KEY_LANGUAGE = "set_language"
     /** UI 无活动自动关闭（分钟），0=不关闭，默认 120（2 小时） */
@@ -122,6 +130,35 @@ object AppSettings {
     fun removeRootFolder(context: Context, path: String) {
         val n = FolderBrowser.normalizeFolder(path)
         setRootFolders(context, rootFolders(context).filterNot { it.equals(n, ignoreCase = true) })
+    }
+
+    /**
+     * 自动统一音量：分析曲目平均响度，缩放到统一目标。
+     * 默认开启。
+     */
+    fun volumeNormalizeEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_VOLUME_NORMALIZE, true)
+
+    fun setVolumeNormalizeEnabled(context: Context, value: Boolean) {
+        prefs(context).edit().putBoolean(KEY_VOLUME_NORMALIZE, value).apply()
+    }
+
+    /**
+     * 目标平均 RMS（相对 full-scale 0~1）。
+     * 默认 [DEFAULT_VOLUME_TARGET_RMS]；合法范围 [MIN_VOLUME_TARGET_RMS]..[MAX_VOLUME_TARGET_RMS]。
+     */
+    fun volumeTargetRms(context: Context): Float {
+        val v = prefs(context).getFloat(KEY_VOLUME_TARGET_RMS, DEFAULT_VOLUME_TARGET_RMS)
+        return v.coerceIn(MIN_VOLUME_TARGET_RMS, MAX_VOLUME_TARGET_RMS)
+    }
+
+    fun setVolumeTargetRms(context: Context, value: Float) {
+        prefs(context).edit()
+            .putFloat(
+                KEY_VOLUME_TARGET_RMS,
+                value.coerceIn(MIN_VOLUME_TARGET_RMS, MAX_VOLUME_TARGET_RMS),
+            )
+            .apply()
     }
 
     /** 均衡器：默认关闭 */

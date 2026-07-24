@@ -107,6 +107,51 @@
                     android:layout_height="wrap_content" />
             </LinearLayout>
 
+            <LinearLayout style="@style/SettingsRow">
+                <TextView
+                    style="@style/SettingsLabel"
+                    android:layout_weight="1"
+                    android:text="@string/settings_volume_normalize" />
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/switchVolumeNormalize"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="4dp"
+                android:text="@string/settings_volume_normalize_hint"
+                android:textColor="?attr/colorTextMuted"
+                android:textSize="12sp" />
+
+            <LinearLayout style="@style/SettingsRow">
+                <TextView
+                    style="@style/SettingsLabel"
+                    android:layout_weight="1"
+                    android:text="@string/settings_volume_target" />
+                <EditText
+                    android:id="@+id/editVolumeTarget"
+                    android:layout_width="100dp"
+                    android:layout_height="wrap_content"
+                    android:gravity="end|center_vertical"
+                    android:hint="0.12"
+                    android:imeOptions="actionDone"
+                    android:inputType="numberDecimal"
+                    android:maxLines="1"
+                    android:textColor="?attr/colorTextPrimary"
+                    android:textSize="15sp" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="4dp"
+                android:text="@string/settings_volume_target_hint"
+                android:textColor="?attr/colorTextMuted"
+                android:textSize="12sp" />
+
             <TextView
                 style="@style/SettingsSection"
                 android:layout_marginTop="16dp"
